@@ -1,7 +1,8 @@
-# PC tool
 import json
 import re
 import requests
+import os
+import sys
 from timeit import default_timer as timer
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -295,7 +296,7 @@ def is_alert_present(browser):
 def process_specs(specs):
     firefox_options = webdriver.FirefoxOptions()
     firefox_options.headless = True
-    browser = webdriver.Firefox(options=firefox_options, executable_path=r'C:\Users\O\Desktop\geckodriver.exe')
+    browser = webdriver.Firefox(options=firefox_options, executable_path=r'' + os.getcwd() + '\geckodriver.exe')
     browser.get('https://pcpartpicker.com/list')
 
     if specs['processor']['clock'] is None:
@@ -512,11 +513,15 @@ def output(original_price, new_price, url, notes=''):
 
 
 if __name__ == '__main__':
-    URL = 'https://www.bestbuy.com/site/cybertronpc-clx-set-gaming-desktop-intel-core-i9-10900x-32gb-memory-nvidia-geforce-rtx-2080-ti-3tb-hdd-960gb-ssd-white-red/6409033.p?skuId=6409033'
-    print('Your URL: %s' % URL)
-    start = timer()
+    if len(sys.argv) < 2:
+        print('Missing URL.')
+        exit(0)
+
+    URL = str(sys.argv[1])
+    print('Your URL is: %s' %URL)
 
     # BestBuy
+    start = timer()
     s = retrieve_pc_specs(URL)
     process_specs(s)
     end = timer()
