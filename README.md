@@ -1,5 +1,5 @@
-# DCloner
-DCloner is a quick, easy to use, script that enables the user to duplicate a gaming desktop into a PCPartPicker URL.
+# PCloner
+PCloner is a quick, easy to use, script that enables the user to duplicate a gaming desktop into a PCPartPicker URL.
 
 ### Prerequisites
 Make sure you have installed all of the following prerequisites on your machine:
