@@ -126,146 +126,156 @@ apu = ['Radeon RX Vega 11']
 def retrieve_pc_specs(url):
     # Define
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
         'Accept-Encoding': 'gzip, deflate, br',
         'Accept-Language': 'en-US,en;q=0.9'
     }
-    general = dict.fromkeys(['price', 'case_color', 'cooling', 'wifi'])
+    general = dict.fromkeys(['price', 'case_color', 'cpu_cooling', 'gpu_cooling', 'wifi'])
     processor = dict.fromkeys(['model', 'model_num', 'clock'])
-    storage = dict.fromkeys(['hdd_size', 'hdd_rpm', 'ssd_size'])
-    memory = dict.fromkeys(['type', 'size', 'clock'])
+    storage = dict.fromkeys(['hdd_size', 'hdd_rpm', 'ssd_size', 'ssd_interface'])
+    memory = dict.fromkeys(['type', 'size', 'clock', 'amount'])
     graphics = dict.fromkeys(['model', 'amount', 'memory'])
     expansion = dict.fromkeys(
-        ['pcie_x1', 'pcie_x4', 'pcie_x8', 'pcie_x16', 'internal2-5', 'internal3-5', 'external3-5', 'external5-25'])
+        ['pcie_x1', 'pcie_x4', 'pcie_x8', 'pcie_x16', 'internal2-5', 'internal3-5', 'external3-5', 'external5-25', 'm2_slots'])
     specs = {'general': general, 'processor': processor, 'storage': storage, 'memory': memory, 'graphics': graphics,
              'expansion': expansion}
 
     data_filter = {'cpu': ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', 'Generation']}
 
-    # Process request and get json object of specifications
+    # Send a GET request to the user provided URL
     res = requests.get(url, headers=headers, verify=True)
-    specs['general']['price'] = re.search(r"currentPrice\\\":([0-9]+(\.[0-9]+)?),", res.text).group(1)
+    # Retrieve Price of PC
+    specs['general']['price'] = re.search('data-testId="customer-price" tabindex="-1"><span aria-hidden="true">\$(.*?)</span>', res.text).group(1)
+    print(specs['general']['price'])
     json_string = re.search(
-        '"componentId":"specifications","contractVersion":"v1","componentVersion":"2.2.1"}, "shop-specifications-[a-z0-9\-]*", "(.*?)", "en-US"',
+        '<script type="application/json" id="shop-specifications-[0-9]*-json">(.*?)</script>',
         res.text, re.IGNORECASE)
-    new_string = json_string.group(1).replace('\\"', '\"').replace('\\\\"', '')
-    j_obj = json.loads(new_string)
+    j_obj = json.loads(json_string.group(1))
 
+    f = open('Missing.txt', 'w')
+
+    # Parse specifications from various categories
     for section in j_obj['specifications']['categories']:
         # Retrieve Case Color
         if section['displayName'] == 'General':
             for detail in section['specifications']:
-                if detail['displayName'] == 'Color':
-                    color = detail['value'].strip().replace(r'\u002F', ' / ').split(' ')
-                    remove = ['', 'RGB', 'Jet', 'Iron', 'Abyss', 'Star', 'Phantom', 'Trim', 'HP', 'Finish', 'In',
-                              'Natural', 'Lunar', 'Light', 'Shadow']
-                    new_color = []
-                    for word in color:
-                        if word in remove:
-                            continue
-                        elif word == 'With':
-                            new_color.append('/')
-                        elif word == '/':
-                            new_color.append('/')
-                        else:
-                            new_color.append(str.upper(word[0:1]) + word[1:])
-                    if len(new_color) == 2 and '/' in new_color:
-                        new_color.remove('/')
-                    specs['general']['case_color'] = str.join('', new_color)
+                match detail['displayName']:
+                    case 'Color':
+                        specs['general']['case_color'] = detail['value']
+                    case _:
+                        f.write("General: " + detail['displayName'] + " - " + detail['value'] + "\n")
         # Retrieve Cooling
-        if section['displayName'] == 'Feature':
+        if section['displayName'] == 'Cooling':
             for detail in section['specifications']:
-                if detail['displayName'] == 'Cooling System':
-                    specs['general']['cooling'] = detail['value']
+                match detail['displayName']:
+                    case 'CPU Cooling System':
+                        specs['general']['cpu_cooling'] = detail['value']
+                    case 'GPU Cooling System':
+                        specs['general']['gpu_cooling'] = detail['value']
+                    case _:
+                        f.write("Cooling: " + detail['displayName'] + " - " + detail['value'] + "\n")
         # Retrieve Storage
-        elif section['displayName'] == 'Storage':
+        if section['displayName'] == 'Storage':
             for detail in section['specifications']:
-                if detail['displayName'] == 'Hard Drive Capacity':
-                    specs['storage']['hdd_size'] = detail['value'].split(' ')[0]
-                elif detail['displayName'] == 'Hard Drive RPM':
-                    specs['storage']['hdd_rpm'] = detail['value'].split(' ')[0]
-                elif detail['displayName'] == 'Solid State Drive Capacity':
-                    size = detail['value'].split(' ')[0]
-                    convert_sizes = {'1024': '1000', '2048': '2000', '3072': '3000', '4096': '4000', '5120': '5000'}
-                    if size in convert_sizes.keys():
-                        specs['storage']['ssd_size'] = convert_sizes[size]
-                    else:
-                        specs['storage']['ssd_size'] = size
+                match detail['displayName']:
+                    case 'Hard Drive Capacity':
+                        specs['storage']['hdd_size'] = detail['value'].split(' ')[0]
+                    case 'Hard Drive RPM':
+                        specs['storage']['hdd_rpm'] = detail['value'].split(' ')[0]
+                    case 'Solid State Drive Capacity':
+                        specs['storage']['ssd_size'] = detail['value'].split(' ')[0]
+                    case 'Solid State Drive Interface':
+                        specs['storage']['ssd_interface'] = detail['value']
+                    case _:
+                        f.write("Storage: " + detail['displayName'] + " - " + detail['value'] + "\n")
         # Retrieve Memory
-        elif section['displayName'] == 'Memory':
+        if section['displayName'] == 'Memory':
             for detail in section['specifications']:
-                if detail['displayName'] == 'System Memory (RAM)':
-                    specs['memory']['size'] = int(detail['value'].split(' ')[0])
-                elif detail['displayName'] == 'System Memory RAM Speed':
-                    specs['memory']['clock'] = detail['value'].split(' ')[0]
-                elif detail['displayName'] == 'Type of Memory (RAM)':
-                    specs['memory']['type'] = detail['value'].split(' ')[0]
+                match detail['displayName']:
+                    case 'System Memory (RAM)':
+                        specs['memory']['size'] = int(detail['value'].split(' ')[0])
+                    case 'System Memory RAM Speed':
+                        specs['memory']['clock'] = detail['value'].split(' ')[0]
+                    case 'Type of Memory (RAM)':
+                        specs['memory']['type'] = detail['value'].split(' ')[0]
+                    case 'Number of Memory Sticks Included':
+                        specs['memory']['amount'] = int(detail['value'])
+                    case _:
+                        f.write("Memory: " + detail['displayName'] + " - " + detail['value'] + "\n")
         # Retrieve GPU
-        elif section['displayName'] == 'Graphics':
+        if section['displayName'] == 'Graphics':
             for detail in section['specifications']:
                 if detail['displayName'] == 'Graphics':
-                    if 'Dual' in detail['value']:
-                        specs['graphics']['model'] = detail['value'].split(' ', 2)[2]
-                        specs['graphics']['amount'] = 2
-                    else:
-                        specs['graphics']['model'] = detail['value'].split(' ', 1)[1]
-                        specs['graphics']['amount'] = 1
-                elif detail['displayName'] == 'Video Memory':
-                    specs['graphics']['memory'] = int(round(float(detail['value'].split(' ')[0]) / 1024))
-                    if specs['graphics']['model'] == 'GeForce GTX 1060':
-                        specs['graphics']['model'] = specs['graphics']['model'] + ' ' + str(
-                            specs['graphics']['memory']) + 'GB'
+                    match detail['displayName']:
+                        case 'Graphics':
+                            # Check if it is dual graphics cards
+                            if 'Dual' in detail['value']:
+                                specs['graphics']['model'] = detail['value'].split(' ', 2)[2]
+                                specs['graphics']['amount'] = 2
+                            else:
+                                specs['graphics']['model'] = detail['value'].split(' ', 1)[1]
+                                specs['graphics']['amount'] = 1
+                        case 'GPU Video Memory (RAM)':
+                            specs['graphics']['memory'] = int(round(float(detail['value'].split(' ')[0]) / 1024))
+                        case _:
+                            f.write("Graphics: " + detail['displayName'] + " - " + detail['value'] + "\n")
         # Retrieve CPU
-        elif section['displayName'] == 'Processor':
+        if section['displayName'] == 'Processor':
             for detail in section['specifications']:
-                if detail['displayName'] == 'Processor Model':
-                    model = detail['value'].split(' ')
-                    for key in data_filter['cpu']:
-                        if key in model:
-                            model.remove(key)
-                    if 'Threadripper' in model:
-                        model.remove('Ryzen')
-                    specs['processor']['model'] = ' '.join(model)
-                elif detail['displayName'] == 'Processor Speed (Base)':
-                    hz = detail['value'].split(' ')
-                    if 'gigahertz' in hz:
-                        specs['processor']['clock'] = str(int(float(hz[0]) * 10))
-                    else:
-                        print('ERROR')
-                elif detail['displayName'] == 'Processor Model Number':
-                    specs['processor']['model_num'] = detail['value']
+                match detail['displayName']:
+                    case 'Processor Model':
+                        specs['processor']['model'] = detail['value']
+                    case 'Processor Model Number':
+                        specs['processor']['model_num'] = detail['value']
+                    case 'Processor Speed (Base)':
+                        hz = detail['value'].split(' ')
+                        if 'gigahertz' in hz:
+                            specs['processor']['clock'] = str(int(float(hz[0]) * 10))
+                        else:
+                            print('ERROR while parsing Processor Speed')
+                    case _:
+                        f.write("CPU: " + detail['displayName'] + " - " + detail['value'] + "\n")
         # Retrieve Motherboard specifications
-        elif section['displayName'] == 'Expansion':
+        if section['displayName'] == 'Expansion':
             for detail in section['specifications']:
-                if detail['displayName'] == 'Number Of PCI-E x1 Slots':
-                    specs['expansion']['pcie_x1'] = detail['value']
-                elif detail['displayName'] == 'Number Of PCI-E x4 Slots':
-                    specs['expansion']['pcie_x4'] = detail['value']
-                elif detail['displayName'] == 'Number Of PCI-E x8 Slots':
-                    specs['expansion']['pcie_x8'] = detail['value']
-                elif detail['displayName'] == 'Number Of PCI-E x16 Slots':
-                    specs['expansion']['pcie_x16'] = detail['value']
-                elif detail['displayName'] == 'Number Of Internal 2.5 Bays':
-                    specs['expansion']['internal2-5'] = detail['value']
-                elif detail['displayName'] == 'NNumber Of Internal 3.5 Bays':
-                    specs['expansion']['internal3-5'] = detail['value']
-                elif detail['displayName'] == 'NNumber Of External 3.5 Expansion Bays':
-                    specs['expansion']['external3-5'] = detail['value']
-                elif detail['displayName'] == 'Number Of External 5.25 Expansion Bays':
-                    specs['expansion']['external5-25'] = detail['value']
+                match detail['displayName']:
+                    case 'Number Of PCI-E x1 Slots':
+                        specs['expansion']['pcie_x1'] = detail['value']
+                    case 'Number Of PCI-E x4 Slots':
+                        specs['expansion']['pcie_x4'] = detail['value']
+                    case 'Number Of PCI-E x8 Slots':
+                        specs['expansion']['pcie_x8'] = detail['value']
+                    case 'Number Of PCI-E x16 Slots':
+                        specs['expansion']['pcie_x16'] = detail['value']
+                    case 'Number Of Internal 2.5" Bays':
+                        specs['expansion']['internal2-5'] = detail['value']
+                    case 'Number Of Internal 3.5" Bays':
+                        specs['expansion']['internal3-5'] = detail['value']
+                    case 'Number Of External 3.5 Expansion Bays':
+                        specs['expansion']['external3-5'] = detail['value']
+                    case 'Number Of External 5.25 Expansion Bays':
+                        specs['expansion']['external5-25'] = detail['value']
+                    case 'Number of M.2 Slots':
+                        specs['expansion']['m2_slots'] = int(detail['value'])
+                    case _:
+                        f.write("Expansion: " + detail['displayName'] + " - " + detail['value'] + "\n")
         # Retrieve Wifi
-        elif section['displayName'] == 'Network':
+        if section['displayName'] == 'Connectivity':
             for detail in section['specifications']:
-                if detail['displayName'] == 'Wireless Networking':
-                    specs['general']['wifi'] = True
-        else:
-            continue
+                if detail['displayName'] == 'Wireless Connectivity':
+                    if "Wi-Fi" in detail['value']:
+                        specs['general']['wifi'] = True
 
+    f.close()
+    f = open("Parsed.txt", "w")
+    f.write(json.dumps(specs))
+    f.close()
     print("Successfully parsed PC specifications...")
     return specs
 
 
 def locate_product_and_click(name, browser):
+
     wait_for_webpage(browser, timeout=10)
     print('Locating %s...' % name, end='')
     products = browser.find_element_by_xpath("//table[@id='paginated_table']//tbody").find_elements_by_tag_name('tr')
@@ -349,7 +359,7 @@ def process_specs(specs):
 
         # Add Additional GPU
         if specs['graphics']['amount'] == 2:
-            if browser.current_url is not 'https://pcpartpicker.com/list/': browser.get(
+            if browser.current_url != 'https://pcpartpicker.com/list/': browser.get(
                 'https://pcpartpicker.com/list/')
             button = browser.find_element_by_xpath(
                 "//td[@class='td__addComponent']//a[@class='button  button--icon button--small pp_add_part_by_identifier']")
@@ -483,7 +493,7 @@ def process_specs(specs):
         exit(0)
 
     # Retrieve new price
-    if browser.current_url is not 'https://pcpartpicker.com/list/': browser.get(
+    if browser.current_url != 'https://pcpartpicker.com/list/': browser.get(
         'https://pcpartpicker.com/list/')
     WebDriverWait(browser, 20).until(
         EC.visibility_of_element_located((By.XPATH, "//tr[@class='tr__total tr__total--final']")))
@@ -523,6 +533,6 @@ if __name__ == '__main__':
     # BestBuy
     start = timer()
     s = retrieve_pc_specs(URL)
-    process_specs(s)
+    #process_specs(s)
     end = timer()
     print('\nTime elapsed: %s seconds.' % str(round(end - start, 2)))
