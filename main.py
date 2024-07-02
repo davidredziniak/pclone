@@ -477,23 +477,7 @@ if __name__ == '__main__':
 
     URL = str(sys.argv[1])
     print('Your URL is: %s' % URL)
-
-    file1 = open("gpu-1", 'r')
-    Lines1 = file1.readlines()
-
-    file2 = open("gpu-2", 'r')
-    Lines2 = file2.readlines()
-
-    mapp = {}
-    i = 0
-    for line in Lines1:
-        mapp[str(line)] = Lines2[i]
-        i += 1
-
-    f = open("gpu.txt", "w")
-    f.write(json.dumps(mapp))
-    f.close()
-
+    
     # BestBuy
     start = timer()
     s = retrieve_pc_specs(URL)
