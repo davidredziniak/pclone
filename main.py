@@ -419,13 +419,15 @@ def retrieve_pc_specs(url):
         'Accept-Encoding': 'gzip, deflate, br',
         'Accept-Language': 'en-US,en;q=0.9'
     }
+    
+    # Define specifications that are able to be parsed from Bestbuy
     general = dict.fromkeys(
-        ['price', 'case_color', 'cpu_cooling', 'gpu_cooling', 'wifi'])
-    processor = dict.fromkeys(['brand', 'model', 'model_num'])
+        ['price', 'case_color', 'wifi'])
+    processor = dict.fromkeys(['brand', 'model', 'model_num', 'cooling'])
     storage = dict.fromkeys(
         ['type', 'hdd_size', 'hdd_rpm', 'ssd_size', 'ssd_interface'])
     memory = dict.fromkeys(['type', 'size', 'clock', 'amount'])
-    graphics = dict.fromkeys(['model', 'amount', 'memory'])
+    graphics = dict.fromkeys(['model', 'amount', 'memory', 'cooling'])
     expansion = dict.fromkeys(
         ['pcie_x1', 'pcie_x4', 'pcie_x8', 'pcie_x16', 'internal2-5', 'internal3-5', 'external3-5', 'external5-25', 'm2_slots'])
     specs = {'general': general, 'processor': processor, 'storage': storage, 'memory': memory, 'graphics': graphics,
@@ -487,8 +489,7 @@ def retrieve_pc_specs(url):
                                     1]
                                 specs['graphics']['amount'] = 1
                         case 'GPU Video Memory (RAM)':
-                            specs['graphics']['memory'] = int(
-                                round(float(detail['value'].split(' ')[0]) / 1024))
+                            specs['graphics']['memory'] = detail['value'].split(' ')[0]
                         case _:
                             f.write(
                                 "Graphics: " + detail['displayName'] + " - " + detail['value'] + "\n")
@@ -523,9 +524,9 @@ def retrieve_pc_specs(url):
             for detail in section['specifications']:
                 match detail['displayName']:
                     case 'CPU Cooling System':
-                        specs['general']['cpu_cooling'] = detail['value']
+                        specs['processor']['cooling'] = detail['value']
                     case 'GPU Cooling System':
-                        specs['general']['gpu_cooling'] = detail['value']
+                        specs['graphics']['cooling'] = detail['value']
                     case _:
                         f.write(
                             "Cooling: " + detail['displayName'] + " - " + detail['value'] + "\n")
@@ -534,7 +535,7 @@ def retrieve_pc_specs(url):
             for detail in section['specifications']:
                 match detail['displayName']:
                     case 'Storage Type':
-                        specs['storage']['type'] = detail['value']
+                        specs['storage']['type'] = detail['value'].strip().split(',')
                     case 'Hard Drive Capacity':
                         specs['storage']['hdd_size'] = detail['value'].split(' ')[
                             0]
@@ -586,6 +587,25 @@ def retrieve_pc_specs(url):
     f.write(json.dumps(specs))
     f.close()
 
+    # Parse GPUs with required GB string
+    gpu_map_fix = {'GeForce RTX 3080': {'': 'GeForce RTX 3080 10GB', '10': 'GeForce RTX 3080 10GB', '12': 'GeForce RTX 3080 12GB LHR'}, 
+                    'GeForce RTX 3060': {'': 'GeForce RTX 3060 8GB', '8': 'GeForce RTX 3060 8GB', '12': 'GeForce RTX 3060 12GB'},
+                    'GeForce RTX 3050': 'GeForce RTX 3050 6GB',
+                    'GeForce GTX 1650': 'GeForce GTX 1650 G5'}
+    
+    gpu_model = specs['graphics']['model']
+    gpu_memory = specs['graphics']['memory']
+    if gpu_model in gpu_map_fix:
+        # Check if GB is parsed
+        if type(gpu_map_fix[gpu_model]) is not dict:
+            specs['graphics']['model'] = gpu_map_fix[gpu_model]
+        else:
+            if gpu_memory in gpu_map_fix[gpu_model]:
+                specs['graphics']['model'] = gpu_map_fix[gpu_model][gpu_memory]
+            else:
+                specs['graphics']['model'] = gpu_map_fix[gpu_model]['']
+    
+    print(specs['graphics']['model'])
     print("Successfully parsed PC specifications...")
     return specs
 
@@ -621,7 +641,7 @@ def process_specs(specs):
     user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36"
 
     chrome_options = uc.ChromeOptions()
-    #chrome_options.add_argument('--headless=new')
+    chrome_options.add_argument('--headless=new')
     chrome_options.add_argument("--start-maximized")
     chrome_options.add_argument("user-agent={}".format(user_agent))
     chrome_options.add_argument(f"--proxy-server={prox}")
@@ -648,9 +668,6 @@ def process_specs(specs):
     
     print('Locating CPU...', end='')
 
-    #cpu_search_box = browser.find_element_by_id('part_category_search')
-    #cpu_search_box.send_keys('')
-
     original_name = ''
     if specs['processor']['brand'] == 'Intel':
         original_name = specs['processor']['model'] + '-' + specs['processor']['model_num']
@@ -658,13 +675,17 @@ def process_specs(specs):
         original_name = specs['processor']['model'] + ' ' + specs['processor']['model_num']
 
     products = browser.find_elements(By.XPATH, "//table[@id='paginated_table']//tbody[@id='category_content']//tr")
-    print(len(products))
 
+    if len(products) == 0:
+        print("Could not find CPU, exiting")
+        exit()
     for product in products:
         name = product.find_element(By.TAG_NAME, "p").text
-        price = product.find_element(By.CLASS_NAME, "td__price").text
-        if '$' in price and name == original_name:
-            product.find_element(By.TAG_NAME, "button").click()
+        price = product.find_element(By.CLASS_NAME, "td__price")
+        if '$' in price.text and name == original_name:
+            button = product.find_element(By.CLASS_NAME, "td__add")
+            browser.execute_script('arguments[0].click()', button)
+
             print('added')
             break
 
@@ -685,6 +706,7 @@ def process_specs(specs):
 
     if len(products) == 0:
         print("Error locating video card")
+        browser.get('https://pcpartpicker.com/list')
     else:
         for product in products:
             name = product.find_element(By.TAG_NAME, "p").text
@@ -735,6 +757,7 @@ def process_specs(specs):
 
     if len(products) == 0:
         print("Error locating motherboard")
+        browser.get('https://pcpartpicker.com/list')
     else:
         for product in products:
             name = product.find_element(By.TAG_NAME, "p").text
@@ -763,6 +786,7 @@ def process_specs(specs):
 
     if len(products) == 0:
         print("Error locating memory")
+        browser.get('https://pcpartpicker.com/list')
     else:
         for product in products:
             name = product.find_element(By.TAG_NAME, "p").text
@@ -777,9 +801,10 @@ def process_specs(specs):
         EC.visibility_of_element_located((By.XPATH, "//div[@class='partlist__keyMetric']")))
     
     
-    query_string = ''
     # Add SSD
-    if specs['storage']['type'] == 'SSD':
+    query_string = ''
+
+    if 'SSD' in specs['storage']['type']:
         query_string += '&t=0'
         if specs['storage']['ssd_interface'] is not None:
             match specs['storage']['ssd_interface']:
@@ -800,7 +825,8 @@ def process_specs(specs):
         products = browser.find_elements(By.XPATH, "//table[@id='paginated_table']//tbody[@id='category_content']//tr")
 
         if len(products) == 0:
-            print("Error locating ssd")
+            print("Error locating SSD")
+            browser.get('https://pcpartpicker.com/list')
         else:
             for product in products:
                 name = product.find_element(By.TAG_NAME, "p").text
@@ -813,25 +839,75 @@ def process_specs(specs):
         # Wait until /list loads
         WebDriverWait(browser, 20).until(
             EC.visibility_of_element_located((By.XPATH, "//div[@class='partlist__keyMetric']")))
-        
-        
 
-    """
+    
     # Add HDD
-    if specs['storage']['hdd_size'] is not None:
-        browser.get('https://pcpartpicker.com/products/internal-hard-drive/#sort=price&R=4,5&t=%s&A=%s000000000' % (
-            specs['storage']['hdd_rpm'], specs['storage']['hdd_size']))
-        while is_alert_present(browser):
-            browser.get('https://pcpartpicker.com/products/internal-hard-drive/#sort=price&R=4,5&t=%s&A=%s000000000' % (
-                specs['storage']['hdd_rpm'], specs['storage']['hdd_size']))
-            continue
-        if not locate_product_and_click('HDD', browser):
-            browser.close()
-            exit(0)
+    if 'HDD' in specs['storage']['type'] and specs['storage']['hdd_size'] is not ('0' or None):
+        query_string = ''
+        if specs['storage']['hdd_rpm'] is not None:
+            query_string += '&t=' + specs['storage']['hdd_rpm']
+
+        browser.get('https://pcpartpicker.com/products/internal-hard-drive/#sort=price&R=4,5&A=%s000000000%s' % (
+            specs['storage']['hdd_size'], query_string))
+        
+        WebDriverWait(browser, 20).until(
+        EC.visibility_of_element_located((By.XPATH, "//table[@id='paginated_table']//tbody[@id='category_content']//tr")))
+
+        print('Locating HDD...', end='')
+        products = browser.find_elements(By.XPATH, "//table[@id='paginated_table']//tbody[@id='category_content']//tr")
+
+        if len(products) == 0:
+            print("Error locating HDD")
+            browser.get('https://pcpartpicker.com/list')
+        else:
+            for product in products:
+                name = product.find_element(By.TAG_NAME, "p").text
+                price = product.find_element(By.CLASS_NAME, "td__price").text
+                if '$' in price:
+                    product.find_element(By.TAG_NAME, "button").click()
+                    print('added')
+                    break
+
+    # Wait until /list loads
+        WebDriverWait(browser, 20).until(
+            EC.visibility_of_element_located((By.XPATH, "//div[@class='partlist__keyMetric']")))
+
+    # Add CPU Cooling
+    match specs['processor']['cooling']:
+        # AIO
+        case 'Liquid':
+            browser.get('https://pcpartpicker.com/products/cpu-cooler/#sort=price&R=5,4&W=10120,10140,10240,10280,10360,10420')
+        # Fan
+        case 'Air' | _:
+            browser.get('https://pcpartpicker.com/products/cpu-cooler/#sort=price&R=5,4&W=0')
+   
+    WebDriverWait(browser, 20).until(
+        EC.visibility_of_element_located((By.XPATH, "//table[@id='paginated_table']//tbody[@id='category_content']//tr")))
+
+    print('Locating Cooling...', end='')
+    products = browser.find_elements(By.XPATH, "//table[@id='paginated_table']//tbody[@id='category_content']//tr")
+
+    if len(products) == 0:
+        print("Error locating cooling device")
+        browser.get('https://pcpartpicker.com/list')
+    else:
+        for product in products:
+            name = product.find_element(By.TAG_NAME, "p").text
+            price = product.find_element(By.CLASS_NAME, "td__price").text
+            if '$' in price:
+                product.find_element(By.TAG_NAME, "button").click()
+                print('added')
+                break
+
+    # Wait until /list loads
+        WebDriverWait(browser, 20).until(
+            EC.visibility_of_element_located((By.XPATH, "//div[@class='partlist__keyMetric']")))
 
     # Add Case
     added_case = False
     query_string = ''
+
+    # Add expansion specs to query string
     if specs['expansion']['internal2-5'] is not None:
         query_string += ('&K=' + specs['expansion']['internal2-5'] + ',17')
     if specs['expansion']['internal3-5'] is not None:
@@ -840,61 +916,84 @@ def process_specs(specs):
         query_string += ('&H=' + specs['expansion']['external3-5'] + ',15')
     if specs['expansion']['external5-25'] is not None:
         query_string += ('&G=' + specs['expansion']['external5-25'] + ',12')
+    if specs['general']['case_color'] is not None:
+        query_string += "&c=" + case_map[specs['general']['case_color']]
+    
+    browser.get('https://pcpartpicker.com/products/case/#sort=price&R=5,4%s' % query_string)
 
-    # Specs + Color matching case
-    if specs['general']['case_color'] is not None and query_string != '':
-        browser.get('https://pcpartpicker.com/products/case/#sort=price&c=%s%s' % (
-            case_map[specs['general']['case_color']], query_string))
-        while is_alert_present(browser):
-            browser.get('https://pcpartpicker.com/products/case/#sort=price&c=%s%s' % (
-                case_map[specs['general']['case_color']], query_string))
-            continue
-        if locate_product_and_click('Case (Color and specs matched)', browser=browser):
-            added_case = True
+    WebDriverWait(browser, 20).until(
+        EC.visibility_of_element_located((By.XPATH, "//table[@id='paginated_table']//tbody[@id='category_content']//tr")))
 
-    # Specs matching case
-    if not added_case and query_string != '':
-        browser.get(
-            'https://pcpartpicker.com/products/case/#sort=price&c=%s' % query_string)
-        while is_alert_present(browser):
-            browser.get(
-                'https://pcpartpicker.com/products/case/#sort=price&c=%s' % query_string)
-            continue
-        products = browser.find_elements_by_xpath(
-            "//tbody[@id='category_content']//tr")
-        if locate_product_and_click('Case (Specs matched)', browser=browser):
-            added_case = True
+    print('Locating Case...', end='')
+    products = browser.find_elements(By.XPATH, "//table[@id='paginated_table']//tbody[@id='category_content']//tr")
 
-    # Color matching case
-    if not added_case and specs['general']['case_color'] is not None:
-        browser.get(
-            'https://pcpartpicker.com/products/case/#sort=price&c=%s' % case_map[specs['general']['case_color']])
-        while is_alert_present(browser):
-            browser.get(
-                'https://pcpartpicker.com/products/case/#sort=price&c=%s' % case_map[specs['general']['case_color']])
-            continue
-        if locate_product_and_click('Case (Color matched)', browser=browser):
-            added_case = True
+    if len(products) == 0:
+        print("Error locating case with matching color + specs")
+    else:
+        for product in products:
+            name = product.find_element(By.TAG_NAME, "p").text
+            price = product.find_element(By.CLASS_NAME, "td__price").text
+            if '$' in price:
+                product.find_element(By.TAG_NAME, "button").click()
+                print('added')
+                added_case = True
+                break
 
-    # No case
+    # No case was found, add default compatible (not matching specs)
     if not added_case:
-        print('Could not find matching case..')
+        browser.get('https://pcpartpicker.com/products/case/#sort=price&R=5,4')
+
+        WebDriverWait(browser, 20).until(
+            EC.visibility_of_element_located((By.XPATH, "//table[@id='paginated_table']//tbody[@id='category_content']//tr")))
+
+        print('Locating default Case...', end='')
+        products = browser.find_elements(By.XPATH, "//table[@id='paginated_table']//tbody[@id='category_content']//tr")
+
+        if len(products) == 0:
+            print("Error locating case")
+        else:
+            for product in products:
+                name = product.find_element(By.TAG_NAME, "p").text
+                price = product.find_element(By.CLASS_NAME, "td__price").text
+                if '$' in price:
+                    product.find_element(By.TAG_NAME, "button").click()
+                    print('added')
+                    added_case = True
+                    break
+    
+    # Wait until /list loads
+    WebDriverWait(browser, 20).until(
+            EC.visibility_of_element_located((By.XPATH, "//div[@class='partlist__keyMetric']")))
+
+
+    # Wait until /list loads
+    WebDriverWait(browser, 20).until(
+        EC.visibility_of_element_located((By.XPATH, "//div[@class='partlist__keyMetric']")))
 
     # Add Power Supply
-    element = browser.find_element_by_class_name('partlist__keyMetric')
+    element = browser.find_element(By.CLASS_NAME, 'partlist__keyMetric')
     wattage = int(element.text.replace('Estimated Wattage: ', '')[:-1]) + 200
     browser.get(
         'https://pcpartpicker.com/products/power-supply/#sort=price&R=4,5&A=%s000000000,2000000000000' % str(wattage))
-    while is_alert_present(browser):
-        browser.get(
-            'https://pcpartpicker.com/products/power-supply/#sort=price&R=4,5&A=%s000000000,2000000000000' % str(
-                wattage))
-        continue
-    if not locate_product_and_click('Power Supply', browser=browser):
-        browser.close()
-        exit(0)
     
-    """
+    WebDriverWait(browser, 20).until(
+        EC.visibility_of_element_located((By.XPATH, "//table[@id='paginated_table']//tbody[@id='category_content']//tr")))
+
+    print('Locating PSU...', end='')
+    products = browser.find_elements(By.XPATH, "//table[@id='paginated_table']//tbody[@id='category_content']//tr")
+
+    if len(products) == 0:
+        print("Error locating PSU")
+    else:
+        for product in products:
+            name = product.find_element(By.TAG_NAME, "p").text
+            price = product.find_element(By.CLASS_NAME, "td__price").text
+            if '$' in price:
+                product.find_element(By.TAG_NAME, "button").click()
+                print('added')
+                break
+    
+
     #Retrieve new price
     if browser.current_url != 'https://pcpartpicker.com/list/':
         browser.get(
@@ -912,7 +1011,7 @@ def process_specs(specs):
            url='https://pcpartpicker.com/list/%s' % result.group(1))
     
     # Close Selenium Webdriver
-    browser.close()
+    browser.quit()
 
 
 def output(original_price, new_price, url, notes=''):
