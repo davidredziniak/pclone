@@ -1,9 +1,10 @@
 import json
 import re
 import requests
-import os
 import sys
 import undetected_chromedriver as uc
+import os
+import dotenv
 from timeit import default_timer as timer
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -446,8 +447,6 @@ def retrieve_pc_specs(url):
         res.text, re.IGNORECASE)
     j_obj = json.loads(json_string.group(1))
 
-    f = open('Missing.txt', 'w')
-
     # Parse specifications from various categories
     for section in j_obj['specifications']['categories']:
         match section['displayName']:
@@ -457,8 +456,6 @@ def retrieve_pc_specs(url):
                     match detail['displayName']:
                         case "Color Category":
                             specs['general']['case_color'] = detail['value']
-                        case _:
-                            f.write("General: %s - %s\n" % (detail['displayName'], detail['value']))
             # Find CPU Specs    
             case "Processor":
                 for detail in section['specifications']:
@@ -478,8 +475,6 @@ def retrieve_pc_specs(url):
                                 specs['processor']['model_num'] = detail['value'].split('-')[-1]
                             else:
                                 specs['processor']['model_num'] = detail['value'].split(' ')[-1]
-                        case _:
-                            f.write("CPU: %s - %s\n" % (detail['displayName'], detail['value']))
             # Find SSD / HDD
             case "Storage":
                 for detail in section['specifications']:
@@ -497,8 +492,6 @@ def retrieve_pc_specs(url):
                                 0]
                         case "Solid State Drive Interface":
                             specs['storage']['ssd_interface'] = detail['value'].split(' ')[0]
-                        case _:
-                            f.write("Storage: %s - %s\n" % (detail['displayName'], detail['value']))
             # Find RAM Specs
             case "Memory":
                 for detail in section['specifications']:
@@ -512,8 +505,6 @@ def retrieve_pc_specs(url):
                             specs['memory']['type'] = detail['value'].split(' ')[0]
                         case "Number of Memory Sticks Included":
                             specs['memory']['amount'] = detail['value']
-                        case _:
-                            f.write("Memory: %s - %s\n" % (detail['displayName'], detail['value']))
             # Find Video Card Specs
             case "Graphics":
                 for detail in section['specifications']:
@@ -528,16 +519,12 @@ def retrieve_pc_specs(url):
                                 specs['graphics']['amount'] = 1
                         case "GPU Video Memory (RAM)":
                             specs['graphics']['memory'] = detail['value'].split(' ')[0]
-                        case _:
-                            f.write("Graphics: %s - %s\n" % (detail['displayName'], detail['value']))
             # Find if PC has WiFi
             case "Connectivity":
                 for detail in section['specifications']:
                     if detail['displayName'] == "Wireless Connectivity":
                         if "Wi-Fi" in detail['value']:
                             specs['general']['wifi'] = True
-                    else:
-                        f.write("Connectivity: %s - %s\n" % (detail['displayName'], detail['value']))
             # Find CPU/GPU Cooler Type (Liquid/Air)
             case "Cooling":
                 for detail in section['specifications']:
@@ -546,8 +533,6 @@ def retrieve_pc_specs(url):
                             specs['processor']['cooling'] = detail['value']
                         case "GPU Cooling System":
                             specs['graphics']['cooling'] = detail['value']
-                        case _:
-                            f.write("Cooling: %s - %s\n" % (detail['displayName'], detail['value']))
             # Find PSU wattage (if specified)
             case "Power":
                 for detail in section['specifications']:
@@ -575,9 +560,6 @@ def retrieve_pc_specs(url):
                             specs['expansion']['external5-25'] = detail['value']
                         case "Number of M.2 Slots":
                             specs['expansion']['m2_slots'] = detail['value']
-                        case _:
-                            f.write("Expansion: %s - %s\n" % (detail['displayName'], detail['value']))
-    f.close()
 
     # Fix parsed GPUs so it is compatible with PcPartPicker
     gpu_model = specs['graphics']['model']
@@ -598,9 +580,9 @@ def retrieve_pc_specs(url):
         specs['processor']['full_model_name'] = specs['processor']['model'] + ' ' + specs['processor']['model_num']
 
     # Output parsed data (DEV)
-    f = open("Parsed.txt", "w")
-    f.write(json.dumps(specs))
-    f.close()
+    #f = open("Parsed.txt", "w")
+    #f.write(json.dumps(specs))
+    #f.close()
 
     print("Successfully parsed PC specifications...")
     return specs
@@ -859,19 +841,39 @@ def output(original_price, new_price, url, found_exact):
 
 
 if __name__ == '__main__':
+    proxy_host = ''
+    proxy_port = ''
+    url = ''
+    # Load .env environmental variables
+    dotenv_file = dotenv.find_dotenv(usecwd=True)
+    dotenv.load_dotenv(dotenv_file)
+    
     if len(sys.argv) < 2:
         print('Missing URL.')
         exit(0)
-
-    URL = str(sys.argv[1])
-    print('Your URL is: %s' % URL)
+    
+    # Set proxy host
+    if os.getenv("PROXY_HOST"):
+        proxy_host = os.getenv("PROXY_HOST")
+    else:
+        print("Missing Proxy Host in .env")
+        exit()
+    
+    # Set proxy port
+    if os.getenv("PROXY_PORT"):
+        proxy_port = os.getenv("PROXY_PORT")
+    else:
+        print("Missing Proxy Port in .env")
+        exit()
+    
+    url = str(sys.argv[1])
+    print("Your URL is: " + url)
     start = timer()
 
     # Parse PC Specs from Bestbuy
-    parsed = retrieve_pc_specs(URL)
-
+    parsed = retrieve_pc_specs(url)
     # Create web driver
-    prox = "185.199.229.156:7492"
+    prox = proxy_host + ":" + proxy_port
     user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36"
     chrome_options = uc.ChromeOptions()
     #chrome_options.add_argument('--headless=new')
