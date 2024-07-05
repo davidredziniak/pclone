@@ -4,24 +4,39 @@ PCloner is a quick, easy to use, script that enables the user to duplicate a gam
 ### Prerequisites
 Make sure you have installed all of the following prerequisites on your machine:
 * Requests - ```pip install requests```
-* Selenium - ```pip install selenium```
+* Undetected Chromedriver - ```pip install undetected-chromedriver```
+* Selenium Stealth - ```pip install selenium-stealth```
+* dotenv - ```pip install python-dotenv```
+
+### Proxy
+Make sure to use a proxy so PCPartPicker doesn't block you!
+
+PROXY_HOST and PROXY_PORT is set in your .env file
+
+```PROXY_HOST=123.43.23.1```
+
+```PROXY_PORT=8080```
 
 ### How it works
-  - First, it parses the specifications of the desktop, given a valid URL, into a dictionary.
+  - First, given a valid URL, it parses the specifications of the desktop into a dictionary.
   - Then, it automates the process of building a PC on PCPartPicker by utilizing a headless Selenium Webdriver.
-  - Finally, when the parts are all added, it spits out information on pricing, as well as the URL for further customization.
+  - Finally, when the parts are all added, it outputs information on pricing, as well as the URL for further customization.
 
 ### Supported Sites
 * BestBuy
 
 ### Future Plans
-* Add support for Newegg links.
 * Optimize
-
-### Usage
-Make sure geckodriver.exe is in the current working directory, and run the script from the command line.
+* Modularize
+* Add support for Newegg links.
+* Host on a server for public use
+* Store parsed data from cached URLs
+* More!
 
 Example
 ```sh
-> main.py https://www.bestbuy.com/site/hp-omen-gaming-desktop-amd-ryzen-7-series-3700x-16gb-memory-nvidia-geforce-rtx-2060-1tb-hdd-256gb-ssd-black/6402514.p?skuId=6402514
+> python main.py https://www.bestbuy.com/site/hp-omen-25l-gaming-desktop-intel-core-i7-14700f-32gb-ddr5-memory-nvidia-geforce-rtx-4060-ti-2tb-ssd-snow-white/6573317.p?skuId=6573317
 ```
+
+Updates:
+- 07/05/24: Refactor code, add proxies, move away from geckodriver and use undetected chromedriver
