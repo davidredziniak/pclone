@@ -5,7 +5,6 @@ PCloner is a quick, easy to use, script that enables the user to duplicate a gam
 Make sure you have installed all of the following prerequisites on your machine:
 * Requests - ```pip install requests```
 * Undetected Chromedriver - ```pip install undetected-chromedriver```
-* Selenium Stealth - ```pip install selenium-stealth```
 * dotenv - ```pip install python-dotenv```
 
 ### Proxy
@@ -39,4 +38,4 @@ Example
 ```
 
 Updates:
-- 07/05/24: Refactor code, add proxies, move away from geckodriver and use undetected chromedriver
+- 07/05/24: Refactor code, add proxies, move away from geckodriver to use undetected chromedriver

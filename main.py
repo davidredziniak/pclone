@@ -12,7 +12,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException
-from selenium_stealth import stealth
 
 case_map = {'Beige/Gray': '5', 'Black': '6', 'Black/Blue': '10', 'Black/Clear': '99', 'Black/Gold': '11',
             'Black/Gray': '12', 'Black/Green': '13', 'Black/Orange': '16', 'Black/Pink': '17', 'Black/Purple': '18',
@@ -884,14 +883,6 @@ if __name__ == '__main__':
     chrome_options.add_argument("user-agent={}".format(user_agent))
     chrome_options.add_argument(f"--proxy-server={prox}")
     browser = uc.Chrome(options=chrome_options)
-    stealth(browser,
-                languages=["en-US", "en"],
-                vendor="Google Inc.",
-                platform="Win32",
-                webgl_vendor="Intel Inc.",
-                renderer="Intel Iris OpenGL Engine",
-                fix_hairline=True
-    )
     
     # Process specifications into PcPartPicker
     process_specs(browser, parsed)
