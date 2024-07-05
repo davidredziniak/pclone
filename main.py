@@ -844,10 +844,12 @@ if __name__ == '__main__':
     proxy_host = ''
     proxy_port = ''
     url = ''
+
     # Load .env environmental variables
     dotenv_file = dotenv.find_dotenv(usecwd=True)
     dotenv.load_dotenv(dotenv_file)
     
+    # Check if a URL was provided
     if len(sys.argv) < 2:
         print('Missing URL.')
         exit(0)
@@ -872,11 +874,12 @@ if __name__ == '__main__':
 
     # Parse PC Specs from Bestbuy
     parsed = retrieve_pc_specs(url)
+
     # Create web driver
     prox = proxy_host + ":" + proxy_port
     user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36"
     chrome_options = uc.ChromeOptions()
-    #chrome_options.add_argument('--headless=new')
+    chrome_options.add_argument('--headless=new')
     chrome_options.add_argument("--start-maximized")
     chrome_options.add_argument("user-agent={}".format(user_agent))
     chrome_options.add_argument(f"--proxy-server={prox}")
