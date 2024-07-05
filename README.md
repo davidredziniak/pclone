@@ -17,6 +17,11 @@ PROXY_HOST and PROXY_PORT is set in your .env file
 
 ```PROXY_PORT=8080```
 
+### PcPartPicker Mapping
+In order to properly map parsed products to pcpartpicker, the files in the pcpartpicker folder need to be populated with their proper values. This allows the program to know how to build a URL query request. 
+
+It is constantly updated as PcPartPicker adds new products to select on the site.
+
 ### How it works
   - First, given a valid URL, it parses the specifications of the desktop into a dictionary.
   - Then, it automates the process of building a PC on PCPartPicker by utilizing a headless Selenium Webdriver.
