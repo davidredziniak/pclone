@@ -4,6 +4,7 @@ PCloner is a quick, easy to use, script that enables the user to duplicate a gam
 ### Prerequisites
 Make sure you have installed all of the following prerequisites on your machine:
 * Requests - ```pip install requests```
+* Selenium - ```pip install selenium```
 * Undetected Chromedriver - ```pip install undetected-chromedriver```
 * dotenv - ```pip install python-dotenv```
 

@@ -6,11 +6,9 @@ import undetected_chromedriver as uc
 import os
 import dotenv
 from timeit import default_timer as timer
-from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException
 
 case_map = {'Beige/Gray': '5', 'Black': '6', 'Black/Blue': '10', 'Black/Clear': '99', 'Black/Gold': '11',
