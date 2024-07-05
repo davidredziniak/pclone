@@ -237,6 +237,21 @@ def retrieve_pc_specs(url):
     print("Successfully parsed PC specifications...")
     return specs
 
+# Wait for a webpage to load given the exact element conditions in the parameters
+def wait_for_webpage(browser, timeout, type, element):
+    try:
+        WebDriverWait(browser, timeout).until(EC.presence_of_element_located((type, element)))
+        return True
+    except TimeoutException:
+        print("Loading took too much time!")
+        return False
+    
+# Exit browser helper function
+def quit_browser(browser, message=""):
+    if message != "":
+        print(message)
+    browser.quit()
+
 # Find a (specified) product and clicks button to add to the build
 def locate_product_and_click(name, url, browser, product_name = None):
     print("Locating %s..." % name, end='')
@@ -273,19 +288,6 @@ def locate_product_and_click(name, url, browser, product_name = None):
             browser.execute_script("arguments[0].click()", button)
             print("added")
             return True
-                
-def wait_for_webpage(browser, timeout, type, element):
-    try:
-        WebDriverWait(browser, timeout).until(EC.presence_of_element_located((type, element)))
-        return True
-    except TimeoutException:
-        print("Loading took too much time!")
-        return False
-    
-def exit_program(browser, message=""):
-    if message != "":
-        print(message)
-    browser.quit()
     
 def process_specs(browser, specs):
     # Begin process by going to pcpartpicker build homepage
@@ -293,7 +295,7 @@ def process_specs(browser, specs):
 
     # Wait for page load (locates if footer exists in DOM)
     if not wait_for_webpage(browser, 15, By.CLASS_NAME, "footer__copyright"):
-        exit_program(browser, "Webpage did not load. Exiting")
+        quit_browser(browser, "Webpage did not load. Exiting")
 
     # Add CPU. Matches CPU generation and picks listing with a price tag.
     url_with_query = "https://pcpartpicker.com/products/cpu/#s=" + cpu_map[specs['processor']['model']]
@@ -542,5 +544,5 @@ if __name__ == '__main__':
     process_specs(browser, parsed)
     end = timer()
     # Close Selenium Webdriver
-    exit_program(browser)
+    quit_browser(browser)
     print('\nTime elapsed: %s seconds.' % str(round(end - start, 2)))
