@@ -103,7 +103,7 @@ def retrieve_pc_specs(url):
 
     # Send a GET request to the user provided URL
     res = requests.get(url, headers=headers, timeout=10, proxies=pro)
-
+    print(res.content)
     # Retrieve Price of PC
     price = re.search(
         'data-testId="customer-price" tabindex="-1"><span aria-hidden="true">\$(.*?)</span>', res.text).group(1)
