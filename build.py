@@ -39,7 +39,7 @@ exact_specs_found = {'cpu': False, 'gpu': False, 'motherboard': False, 'memory':
 
 # Output JSON for use in web app
 output_json = {'success': False, 'exactPc': False, 'originalPrice': 0, 'newPrice': 0, 'link': ''}
-output_to_console = True
+output_to_console = False
 
 def load_ppp_maps():
     # Load CPU
