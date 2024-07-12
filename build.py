@@ -105,149 +105,153 @@ def retrieve_pc_specs(url):
     res = requests.get(url, headers=headers, timeout=10, proxies=pro)
 
     # Retrieve Price of PC
-    price = re.search(
-        'data-testId="customer-price" tabindex="-1"><span aria-hidden="true">\$(.*?)</span>', res.text).group(1)
-    price = float(price.replace(',', ''))
-    specs['general']['price'] = price
+    try:
+        price = re.search(
+            'data-testId="customer-price" tabindex="-1"><span aria-hidden="true">\$(.*?)</span>', res.text).group(1)
+        price = float(price.replace(',', ''))
+        specs['general']['price'] = price
 
-    # Search for the specifications in JSON format
-    json_string = re.search(
-        '<script type="application/json" id="shop-specifications-[0-9]*-json">(.*?)</script>',
-        res.text, re.IGNORECASE)
-    j_obj = json.loads(json_string.group(1))
+        # Search for the specifications in JSON format
+        json_string = re.search(
+            '<script type="application/json" id="shop-specifications-[0-9]*-json">(.*?)</script>',
+            res.text, re.IGNORECASE)
+        j_obj = json.loads(json_string.group(1))
 
-    # Parse specifications from various categories
-    for section in j_obj['specifications']['categories']:
-        match section['displayName']:
-            # Find Case Color
-            case "General":
-                for detail in section['specifications']:
-                    match detail['displayName']:
-                        case "Color Category":
-                            specs['general']['case_color'] = detail['value']
-            # Find CPU Specs    
-            case "Processor":
-                for detail in section['specifications']:
-                    match detail['displayName']:
-                        case "Processor Brand":
-                            specs['processor']['brand'] = detail['value']
-                        case "Processor Model":
-                            model = detail['value'].split(' ')
-                            for key in cpu_filter['cpu']:
-                                if key in model:
-                                    model.remove(key)
-                            if "Threadripper" in model:
-                                model.remove('Ryzen')
-                            specs['processor']['model'] = ' '.join(model)
-                        case "Processor Model Number":
-                            if '-' in detail['value']:
-                                specs['processor']['model_num'] = detail['value'].split('-')[-1]
-                            else:
-                                specs['processor']['model_num'] = detail['value'].split(' ')[-1]
-            # Find SSD / HDD
-            case "Storage":
-                for detail in section['specifications']:
-                    match detail['displayName']:
-                        case "Storage Type":
-                            specs['storage']['type'] = detail['value'].strip().split(',')
-                        case "Hard Drive Capacity":
-                            specs['storage']['hdd_size'] = detail['value'].split(' ')[
-                                0]
-                        case "Hard Drive RPM":
-                            specs['storage']['hdd_rpm'] = detail['value'].split(' ')[
-                                0]
-                        case "Solid State Drive Capacity":
-                            specs['storage']['ssd_size'] = detail['value'].split(' ')[
-                                0]
-                        case "Solid State Drive Interface":
-                            specs['storage']['ssd_interface'] = detail['value'].split(' ')[0]
-            # Find RAM Specs
-            case "Memory":
-                for detail in section['specifications']:
-                    match detail['displayName']:
-                        case "System Memory (RAM)":
-                            specs['memory']['size'] = detail['value'].split(' ')[0]
-                        case "System Memory RAM Speed":
-                            specs['memory']['clock'] = detail['value'].split(' ')[
-                                0]
-                        case "Type of Memory (RAM)":
-                            specs['memory']['type'] = detail['value'].split(' ')[0]
-                        case "Number of Memory Sticks Included":
-                            specs['memory']['amount'] = detail['value']
-            # Find Video Card Specs
-            case "Graphics":
-                for detail in section['specifications']:
-                    match detail['displayName']:
-                        case "Graphics":
-                            # Check if it is dual graphics cards
-                            if "Dual" in detail['value']:
-                                specs['graphics']['model'] = detail['value'].split(' ', 2)[2]
-                                specs['graphics']['amount'] = 2
-                            else:
-                                specs['graphics']['model'] = detail['value'].split(' ', 1)[1]
-                                specs['graphics']['amount'] = 1
-                        case "GPU Video Memory (RAM)":
-                            specs['graphics']['memory'] = detail['value'].split(' ')[0]
-            # Find if PC has WiFi
-            case "Connectivity":
-                for detail in section['specifications']:
-                    if detail['displayName'] == "Wireless Connectivity":
-                        if "Wi-Fi" in detail['value']:
-                            specs['general']['wifi'] = True
-            # Find CPU/GPU Cooler Type (Liquid/Air)
-            case "Cooling":
-                for detail in section['specifications']:
-                    match detail['displayName']:
-                        case "CPU Cooling System":
-                            specs['processor']['cooling'] = detail['value']
-                        case "GPU Cooling System":
-                            specs['graphics']['cooling'] = detail['value']
-            # Find PSU wattage (if specified)
-            case "Power":
-                for detail in section['specifications']:
-                    if detail['displayName'] == "Power Supply Maximum Wattage":
-                        specs['power']['wattage'] = detail['value'].split(' ')[0]
-            # Find the types and amounts of PCIe slots and storage bays
-            case "Expansion":
-                for detail in section['specifications']:
-                    match detail['displayName']:
-                        case "Number Of PCI-E x1 Slots":
-                            specs['expansion']['pcie_x1'] = detail['value']
-                        case "Number Of PCI-E x4 Slots":
-                            specs['expansion']['pcie_x4'] = detail['value']
-                        case "Number Of PCI-E x8 Slots":
-                            specs['expansion']['pcie_x8'] = detail['value']
-                        case "Number Of PCI-E x16 Slots":
-                            specs['expansion']['pcie_x16'] = detail['value']
-                        case "Number Of Internal 2.5\" Bays":
-                            specs['expansion']['internal2-5'] = detail['value']
-                        case "Number Of Internal 3.5\" Bays":
-                            specs['expansion']['internal3-5'] = detail['value']
-                        case "Number Of External 3.5 Expansion Bays":
-                            specs['expansion']['external3-5'] = detail['value']
-                        case "Number Of External 5.25 Expansion Bays":
-                            specs['expansion']['external5-25'] = detail['value']
-                        case "Number of M.2 Slots":
-                            specs['expansion']['m2_slots'] = detail['value']
+        # Parse specifications from various categories
+        for section in j_obj['specifications']['categories']:
+            match section['displayName']:
+                # Find Case Color
+                case "General":
+                    for detail in section['specifications']:
+                        match detail['displayName']:
+                            case "Color Category":
+                                specs['general']['case_color'] = detail['value']
+                # Find CPU Specs    
+                case "Processor":
+                    for detail in section['specifications']:
+                        match detail['displayName']:
+                            case "Processor Brand":
+                                specs['processor']['brand'] = detail['value']
+                            case "Processor Model":
+                                model = detail['value'].split(' ')
+                                for key in cpu_filter['cpu']:
+                                    if key in model:
+                                        model.remove(key)
+                                if "Threadripper" in model:
+                                    model.remove('Ryzen')
+                                specs['processor']['model'] = ' '.join(model)
+                            case "Processor Model Number":
+                                if '-' in detail['value']:
+                                    specs['processor']['model_num'] = detail['value'].split('-')[-1]
+                                else:
+                                    specs['processor']['model_num'] = detail['value'].split(' ')[-1]
+                # Find SSD / HDD
+                case "Storage":
+                    for detail in section['specifications']:
+                        match detail['displayName']:
+                            case "Storage Type":
+                                specs['storage']['type'] = detail['value'].strip().split(',')
+                            case "Hard Drive Capacity":
+                                specs['storage']['hdd_size'] = detail['value'].split(' ')[
+                                    0]
+                            case "Hard Drive RPM":
+                                specs['storage']['hdd_rpm'] = detail['value'].split(' ')[
+                                    0]
+                            case "Solid State Drive Capacity":
+                                specs['storage']['ssd_size'] = detail['value'].split(' ')[
+                                    0]
+                            case "Solid State Drive Interface":
+                                specs['storage']['ssd_interface'] = detail['value'].split(' ')[0]
+                # Find RAM Specs
+                case "Memory":
+                    for detail in section['specifications']:
+                        match detail['displayName']:
+                            case "System Memory (RAM)":
+                                specs['memory']['size'] = detail['value'].split(' ')[0]
+                            case "System Memory RAM Speed":
+                                specs['memory']['clock'] = detail['value'].split(' ')[
+                                    0]
+                            case "Type of Memory (RAM)":
+                                specs['memory']['type'] = detail['value'].split(' ')[0]
+                            case "Number of Memory Sticks Included":
+                                specs['memory']['amount'] = detail['value']
+                # Find Video Card Specs
+                case "Graphics":
+                    for detail in section['specifications']:
+                        match detail['displayName']:
+                            case "Graphics":
+                                # Check if it is dual graphics cards
+                                if "Dual" in detail['value']:
+                                    specs['graphics']['model'] = detail['value'].split(' ', 2)[2]
+                                    specs['graphics']['amount'] = 2
+                                else:
+                                    specs['graphics']['model'] = detail['value'].split(' ', 1)[1]
+                                    specs['graphics']['amount'] = 1
+                            case "GPU Video Memory (RAM)":
+                                specs['graphics']['memory'] = detail['value'].split(' ')[0]
+                # Find if PC has WiFi
+                case "Connectivity":
+                    for detail in section['specifications']:
+                        if detail['displayName'] == "Wireless Connectivity":
+                            if "Wi-Fi" in detail['value']:
+                                specs['general']['wifi'] = True
+                # Find CPU/GPU Cooler Type (Liquid/Air)
+                case "Cooling":
+                    for detail in section['specifications']:
+                        match detail['displayName']:
+                            case "CPU Cooling System":
+                                specs['processor']['cooling'] = detail['value']
+                            case "GPU Cooling System":
+                                specs['graphics']['cooling'] = detail['value']
+                # Find PSU wattage (if specified)
+                case "Power":
+                    for detail in section['specifications']:
+                        if detail['displayName'] == "Power Supply Maximum Wattage":
+                            specs['power']['wattage'] = detail['value'].split(' ')[0]
+                # Find the types and amounts of PCIe slots and storage bays
+                case "Expansion":
+                    for detail in section['specifications']:
+                        match detail['displayName']:
+                            case "Number Of PCI-E x1 Slots":
+                                specs['expansion']['pcie_x1'] = detail['value']
+                            case "Number Of PCI-E x4 Slots":
+                                specs['expansion']['pcie_x4'] = detail['value']
+                            case "Number Of PCI-E x8 Slots":
+                                specs['expansion']['pcie_x8'] = detail['value']
+                            case "Number Of PCI-E x16 Slots":
+                                specs['expansion']['pcie_x16'] = detail['value']
+                            case "Number Of Internal 2.5\" Bays":
+                                specs['expansion']['internal2-5'] = detail['value']
+                            case "Number Of Internal 3.5\" Bays":
+                                specs['expansion']['internal3-5'] = detail['value']
+                            case "Number Of External 3.5 Expansion Bays":
+                                specs['expansion']['external3-5'] = detail['value']
+                            case "Number Of External 5.25 Expansion Bays":
+                                specs['expansion']['external5-25'] = detail['value']
+                            case "Number of M.2 Slots":
+                                specs['expansion']['m2_slots'] = detail['value']
 
-    # Fix parsed GPUs so it is compatible with PcPartPicker
-    gpu_model = specs['graphics']['model']
-    gpu_memory = specs['graphics']['memory']
-    if gpu_model in gpu_map_fix:
-        if type(gpu_map_fix[gpu_model]) is not dict:
-            specs['graphics']['model'] = gpu_map_fix[gpu_model]
-        else:
-            if gpu_memory in gpu_map_fix[gpu_model]:
-                specs['graphics']['model'] = gpu_map_fix[gpu_model][gpu_memory]
+        # Fix parsed GPUs so it is compatible with PcPartPicker
+        gpu_model = specs['graphics']['model']
+        gpu_memory = specs['graphics']['memory']
+        if gpu_model in gpu_map_fix:
+            if type(gpu_map_fix[gpu_model]) is not dict:
+                specs['graphics']['model'] = gpu_map_fix[gpu_model]
             else:
-                specs['graphics']['model'] = gpu_map_fix[gpu_model]['']
-    
-    # Fix CPU names
-    if specs['processor']['brand'] == "Intel":
-        specs['processor']['full_model_name'] = specs['processor']['model'] + '-' + specs['processor']['model_num']
-    else:
-        specs['processor']['full_model_name'] = specs['processor']['model'] + ' ' + specs['processor']['model_num']
+                if gpu_memory in gpu_map_fix[gpu_model]:
+                    specs['graphics']['model'] = gpu_map_fix[gpu_model][gpu_memory]
+                else:
+                    specs['graphics']['model'] = gpu_map_fix[gpu_model]['']
+        
+        # Fix CPU names
+        if specs['processor']['brand'] == "Intel":
+            specs['processor']['full_model_name'] = specs['processor']['model'] + '-' + specs['processor']['model_num']
+        else:
+            specs['processor']['full_model_name'] = specs['processor']['model'] + ' ' + specs['processor']['model_num']
 
+    except Exception as e:
+        print(e)
+    
     # Output parsed data (DEV)
     #f = open("Parsed.txt", "w")
     #f.write(json.dumps(specs))
@@ -575,7 +579,7 @@ if __name__ == '__main__':
 
     # Parse PC Specs from Bestbuy
     parsed = retrieve_pc_specs(url)
-    print(parsed)
+
     # Create web driver
     prox = PROXY_HOST + ":" + PROXY_PORT
     user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36"
