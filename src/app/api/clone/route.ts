@@ -23,6 +23,8 @@ export async function GET(request: Request) {
     dataToSend += data.toString();
   }
   
+  return Response.json({ success: false, message: dataToSend }, { status: 404 });
+
   // Python output was empty, some error occured
   if (dataToSend.length === 0){
     return Response.json({ success: false, message: "There was an error processing this link." }, { status: 404 });
