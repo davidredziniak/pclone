@@ -5,6 +5,8 @@ import sys
 import undetected_chromedriver as uc
 import os
 import dotenv
+import zipfile
+
 from timeit import default_timer as timer
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -70,7 +72,11 @@ def load_ppp_maps():
 def retrieve_pc_specs(url):
     # Define headers for web requests
     headers = {
+        'sec-ch-ua': '"Not/A)Brand;v="8", "Chromium";v="126", "Google Chrome";v="126"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'Accept-Encoding': 'gzip, deflate, br',
         'Accept-Language': 'en-US,en;q=0.9'
     }
@@ -83,7 +89,7 @@ def retrieve_pc_specs(url):
                     'GeForce GTX 1650': 'GeForce GTX 1650 G5'}
     
     # Send a GET request to the user provided URL
-    res = requests.get(url, headers=headers, verify=True)
+    res = requests.get(url, headers=headers, timeout=5)
 
     # Retrieve Price of PC
     price = re.search(
@@ -534,12 +540,13 @@ if __name__ == '__main__':
     prox = proxy_host + ":" + proxy_port
     user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36"
     chrome_options = uc.ChromeOptions()
-    chrome_options.add_argument('--headless=new')
+    #chrome_options.add_argument('--headless=new')
     chrome_options.add_argument("--start-maximized")
     chrome_options.add_argument("user-agent={}".format(user_agent))
+    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
     chrome_options.add_argument(f"--proxy-server={prox}")
     browser = uc.Chrome(options=chrome_options)
-    
+
     # Process specifications into PcPartPicker
     process_specs(browser, parsed)
     end = timer()
