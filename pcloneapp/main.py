@@ -253,7 +253,6 @@ def wait_for_webpage(browser, timeout, type, element):
         return True
     except TimeoutException:
         print("Loading took too much time!")
-        quit_browser(browser)
         return False
     
 # Exit browser helper function
@@ -417,6 +416,7 @@ def process_specs(browser, specs):
         wait_for_webpage(browser, 15, By.XPATH, "//div[@class='partlist__keyMetric']")
 
     # Add Case
+    added_case = False
     query_string = ""
 
     # Add expansion specs to query string

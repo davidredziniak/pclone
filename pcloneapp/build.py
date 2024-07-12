@@ -5,11 +5,16 @@ import sys
 import undetected_chromedriver as uc
 import os
 import dotenv
+
 from timeit import default_timer as timer
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import TimeoutException
+
+# Proxy Settings
+PROXY_HOST = ''
+PROXY_PORT = ''
 
 # PcPartPicker pre-defined mapping
 cpu_map = {}
@@ -32,7 +37,7 @@ exact_specs_found = {'cpu': False, 'gpu': False, 'motherboard': False, 'memory':
 
 # Output JSON for use in web app
 output_json = {'success': False, 'exactPc': False, 'originalPrice': 0, 'newPrice': 0, 'link': ''}
-output_to_console = False
+output_to_console = True
 
 def load_ppp_maps():
     # Load CPU
@@ -515,8 +520,6 @@ def output(original_price, new_price, url, found_exact):
         print(json.dumps(output_json))
 
 if __name__ == '__main__':
-    proxy_host = ''
-    proxy_port = ''
     url = ''
 
     # Load PPP maps
@@ -533,16 +536,30 @@ if __name__ == '__main__':
     
     # Set proxy host
     if os.getenv("PROXY_HOST"):
-        proxy_host = os.getenv("PROXY_HOST")
+        PROXY_HOST = os.getenv("PROXY_HOST")
     else:
         print("Missing Proxy Host in .env")
         exit()
     
     # Set proxy port
     if os.getenv("PROXY_PORT"):
-        proxy_port = os.getenv("PROXY_PORT")
+        PROXY_PORT = os.getenv("PROXY_PORT")
     else:
         print("Missing Proxy Port in .env")
+        exit()
+
+    # Set proxy user
+    if os.getenv("PROXY_USER"):
+        PROXY_USER = os.getenv("PROXY_USER")
+    else:
+        print("Missing Proxy User in .env")
+        exit()
+    
+    # Set proxy pass
+    if os.getenv("PROXY_PASS"):
+        PROXY_PASS = os.getenv("PROXY_PASS")
+    else:
+        print("Missing Proxy Pass in .env")
         exit()
     
     url = str(sys.argv[1])
@@ -554,13 +571,33 @@ if __name__ == '__main__':
     parsed = retrieve_pc_specs(url)
 
     # Create web driver
-    prox = proxy_host + ":" + proxy_port
+    prox = PROXY_HOST + ":" + PROXY_PORT
     user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36"
-    chrome_options = uc.ChromeOptions()
+    chrome_options = uc.options.ChromeOptions()
+
+    # Write background script for extension to file (using updated proxy user + pass)
+    b_js = """chrome.webRequest.onAuthRequired.addListener((details, callback) => {
+        callback({
+          authCredentials: {
+            username: '""" + PROXY_USER + """',
+            password: '""" + PROXY_PASS + """'
+          }
+        });
+      },
+      { urls: ["<all_urls>"] },
+      ['asyncBlocking']
+    );"""
+
+    f = open(os.getcwd() + "/proxy_ext/background.js","w+")
+    f.write(b_js)
+    f.close()
+
+    proxy_extension_path = os.getcwd() + '/proxy_ext'
+    chrome_options.add_argument("--load-extension=" + proxy_extension_path)
     chrome_options.add_argument('--headless=new')
     chrome_options.add_argument("--start-maximized")
-    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
     chrome_options.add_argument("user-agent={}".format(user_agent))
+    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
     chrome_options.add_argument(f"--proxy-server={prox}")
     browser = uc.Chrome(options=chrome_options)
     
