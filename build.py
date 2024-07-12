@@ -15,6 +15,8 @@ from selenium.common.exceptions import TimeoutException
 # Proxy Settings
 PROXY_HOST = ''
 PROXY_PORT = ''
+PROXY_USER = ''
+PROXY_PASS = ''
 
 # PcPartPicker pre-defined mapping
 cpu_map = {}
@@ -37,7 +39,7 @@ exact_specs_found = {'cpu': False, 'gpu': False, 'motherboard': False, 'memory':
 
 # Output JSON for use in web app
 output_json = {'success': False, 'exactPc': False, 'originalPrice': 0, 'newPrice': 0, 'link': ''}
-output_to_console = False
+output_to_console = True
 
 def load_ppp_maps():
     # Load CPU
@@ -95,8 +97,12 @@ def retrieve_pc_specs(url):
                     'GeForce RTX 3050': 'GeForce RTX 3050 6GB',
                     'GeForce GTX 1650': 'GeForce GTX 1650 G5'}
     
+    pro = { 
+              "http"  : "http://" + PROXY_USER + ":" + PROXY_PASS + "@" + PROXY_HOST + ":" + PROXY_PORT, 
+    }
+
     # Send a GET request to the user provided URL
-    res = requests.get(url, headers=headers, timeout=5)
+    res = requests.get(url, headers=headers, timeout=10, proxies=pro)
 
     # Retrieve Price of PC
     price = re.search(
@@ -602,7 +608,7 @@ if __name__ == '__main__':
     browser = uc.Chrome(options=chrome_options)
     
     # Process specifications into PcPartPicker
-    process_specs(browser, parsed)
+    #process_specs(browser, parsed)
     end = timer()
     # Close Selenium Webdriver
     quit_browser(browser)
