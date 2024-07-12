@@ -608,7 +608,7 @@ if __name__ == '__main__':
     browser = uc.Chrome(options=chrome_options)
     
     # Process specifications into PcPartPicker
-    #process_specs(browser, parsed)
+    process_specs(browser, parsed)
     end = timer()
     # Close Selenium Webdriver
     quit_browser(browser)
