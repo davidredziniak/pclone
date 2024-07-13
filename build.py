@@ -105,7 +105,7 @@ def retrieve_pc_specs(url):
 
     try:
         # Send a GET request to the user provided URL
-        res = requests.get(url, headers=headers, timeout=10, proxies=pro)
+        res = requests.get(url, headers=headers, verify=True, timeout=15, proxies=pro)
 
         # Retrieve Price of PC
         price = re.search(
@@ -580,7 +580,6 @@ if __name__ == '__main__':
         print("Your URL is: " + url)
     start = timer()
 
-    print("11-1")
     # Parse PC Specs from Bestbuy
     try:
         parsed = retrieve_pc_specs(url)
