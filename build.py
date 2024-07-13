@@ -110,7 +110,7 @@ def retrieve_pc_specs(url):
             'data-testId="customer-price" tabindex="-1"><span aria-hidden="true">\$(.*?)</span>', res.text).group(1)
         price = float(price.replace(',', ''))
         specs['general']['price'] = price
-
+        print(price)
         # Search for the specifications in JSON format
         json_string = re.search(
             '<script type="application/json" id="shop-specifications-[0-9]*-json">(.*?)</script>',
@@ -248,7 +248,7 @@ def retrieve_pc_specs(url):
             specs['processor']['full_model_name'] = specs['processor']['model'] + '-' + specs['processor']['model_num']
         else:
             specs['processor']['full_model_name'] = specs['processor']['model'] + ' ' + specs['processor']['model_num']
-
+        print(specs)
     except Exception as e:
         print(e)
     
