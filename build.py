@@ -105,7 +105,7 @@ def retrieve_pc_specs(url):
 
     try:
         # Send a GET request to the user provided URL
-        res = requests.get(url, headers=headers, verify=True, proxies=pro)
+        res = requests.get(url, headers=headers, verify=True)
 
         # Retrieve Price of PC
         price = re.search(
