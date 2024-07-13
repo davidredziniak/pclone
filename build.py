@@ -103,19 +103,20 @@ def retrieve_pc_specs(url):
 
     # Send a GET request to the user provided URL
     res = requests.get(url, headers=headers, timeout=10, proxies=pro)
-
+    print("here1")
     # Retrieve Price of PC
     try:
+        print("here2")
         price = re.search(
             'data-testId="customer-price" tabindex="-1"><span aria-hidden="true">\$(.*?)</span>', res.text).group(1)
         price = float(price.replace(',', ''))
         specs['general']['price'] = price
-        print(price)
         # Search for the specifications in JSON format
         json_string = re.search(
             '<script type="application/json" id="shop-specifications-[0-9]*-json">(.*?)</script>',
             res.text, re.IGNORECASE)
         j_obj = json.loads(json_string.group(1))
+        print("here3")
 
         # Parse specifications from various categories
         for section in j_obj['specifications']['categories']:
