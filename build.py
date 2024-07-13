@@ -103,7 +103,7 @@ def retrieve_pc_specs(url):
 
     # Send a GET request to the user provided URL
     res = requests.get(url, headers=headers, timeout=10, proxies=pro)
-    print("here1")
+    print(res.content)
     # Retrieve Price of PC
     try:
         print("here2")
@@ -574,6 +574,7 @@ if __name__ == '__main__':
         exit()
     
     url = str(sys.argv[1])
+    print("PROX USER: " + PROXY_USER)
     if output_to_console:
         print("Your URL is: " + url)
     start = timer()
