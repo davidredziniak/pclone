@@ -5,6 +5,7 @@ import sys
 import undetected_chromedriver as uc
 import os
 import dotenv
+import traceback
 
 from timeit import default_timer as timer
 from selenium.webdriver.common.by import By
@@ -101,12 +102,12 @@ def retrieve_pc_specs(url):
               "http"  : "http://" + PROXY_USER + ":" + PROXY_PASS + "@" + PROXY_HOST + ":" + PROXY_PORT, 
     }
 
-    # Send a GET request to the user provided URL
-    res = requests.get(url, headers=headers, timeout=10, proxies=pro)
-    print(res.content)
-    # Retrieve Price of PC
+
     try:
-        print("here2")
+        # Send a GET request to the user provided URL
+        res = requests.get(url, headers=headers, timeout=10, proxies=pro)
+
+        # Retrieve Price of PC
         price = re.search(
             'data-testId="customer-price" tabindex="-1"><span aria-hidden="true">\$(.*?)</span>', res.text).group(1)
         price = float(price.replace(',', ''))
@@ -250,8 +251,8 @@ def retrieve_pc_specs(url):
         else:
             specs['processor']['full_model_name'] = specs['processor']['model'] + ' ' + specs['processor']['model_num']
         print(specs)
-    except Exception as e:
-        print(e)
+    except Exception:
+        print(traceback.format_exc())
     
     # Output parsed data (DEV)
     #f = open("Parsed.txt", "w")
@@ -574,14 +575,18 @@ if __name__ == '__main__':
         exit()
     
     url = str(sys.argv[1])
-    print("PROX USER: " + PROXY_USER)
+
     if output_to_console:
         print("Your URL is: " + url)
     start = timer()
 
+    print("11-1")
     # Parse PC Specs from Bestbuy
-    parsed = retrieve_pc_specs(url)
-
+    try:
+        parsed = retrieve_pc_specs(url)
+    except Exception:
+        print(traceback.format_exc())
+    
     # Create web driver
     prox = PROXY_HOST + ":" + PROXY_PORT
     user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36"
