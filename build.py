@@ -6,6 +6,7 @@ import undetected_chromedriver as uc
 import os
 import dotenv
 import traceback
+import httpx
 
 from timeit import default_timer as timer
 from selenium.webdriver.common.by import By
@@ -82,13 +83,18 @@ def load_ppp_maps():
 def retrieve_pc_specs(url):
     # Define headers for web requests
     headers = {
-        'sec-ch-ua': '"Not/A)Brand;v="8", "Chromium";v="126", "Google Chrome";v="126"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept-Language': 'en-US,en;q=0.9'
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Connection': 'keep-alive',
+        'Host': 'www.bestbuy.com',
+        'Priority': 'u=0, i',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'TE': 'trailers',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
     }
     
     # Best Buy specific filtering
@@ -99,14 +105,16 @@ def retrieve_pc_specs(url):
                     'GeForce GTX 1650': 'GeForce GTX 1650 G5'}
     
     pro = { 
-              "http"  : "http://" + PROXY_USER + ":" + PROXY_PASS + "@" + PROXY_HOST + ":" + PROXY_PORT, 
+              "http://"  : "http://" + PROXY_USER + ":" + PROXY_PASS + "@" + PROXY_HOST + ":" + PROXY_PORT, 
     }
 
 
     try:
         # Send a GET request to the user provided URL
-        res = requests.get(url, headers=headers, verify=True)
-
+        #res = requests.get(url, headers=headers, verify=True, proxies=pro)
+        res = ''
+        with httpx.Client(proxy=pro['http://']) as client:
+            res = client.get(url, headers=headers, timeout=None)
         # Retrieve Price of PC
         price = re.search(
             'data-testId="customer-price" tabindex="-1"><span aria-hidden="true">\$(.*?)</span>', res.text).group(1)
@@ -265,6 +273,7 @@ def retrieve_pc_specs(url):
 
 # Wait for a webpage to load given the exact element conditions in the parameters
 def wait_for_webpage(browser, timeout, type, element):
+
     try:
         WebDriverWait(browser, timeout).until(EC.presence_of_element_located((type, element)))
         return True
