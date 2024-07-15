@@ -593,39 +593,46 @@ if __name__ == '__main__':
     except Exception:
         print(traceback.format_exc())
     
+     # Write background script for extension to file (using updated proxy user + pass)
+    try:
+        b_js = """chrome.webRequest.onAuthRequired.addListener((details, callback) => {
+            callback({
+            authCredentials: {
+                username: '""" + PROXY_USER + """',
+                password: '""" + PROXY_PASS + """'
+            }
+            });
+        },
+        { urls: ["<all_urls>"] },
+        ['asyncBlocking']
+        );"""
+
+        f = open(os.getcwd() + "/proxy_ext/background.js","w+")
+        f.write(b_js)
+        f.close()
+    except Exception:
+        print(traceback.format_exc())
+
     # Create web driver
-    prox = PROXY_HOST + ":" + PROXY_PORT
-    user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36"
-    chrome_options = uc.options.ChromeOptions()
+    try:
+        prox = PROXY_HOST + ":" + PROXY_PORT
+        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36"
+        chrome_options = uc.options.ChromeOptions()
 
-    # Write background script for extension to file (using updated proxy user + pass)
-    b_js = """chrome.webRequest.onAuthRequired.addListener((details, callback) => {
-        callback({
-          authCredentials: {
-            username: '""" + PROXY_USER + """',
-            password: '""" + PROXY_PASS + """'
-          }
-        });
-      },
-      { urls: ["<all_urls>"] },
-      ['asyncBlocking']
-    );"""
+        proxy_extension_path = os.getcwd() + '/proxy_ext'
+        chrome_options.add_argument("--load-extension=" + proxy_extension_path)
+        chrome_options.add_argument('--headless=new')
+        chrome_options.add_argument("--start-maximized")
+        chrome_options.add_argument("user-agent={}".format(user_agent))
+        chrome_options.add_argument("--blink-settings=imagesEnabled=false")
+        chrome_options.add_argument(f"--proxy-server={prox}")
+        browser = uc.Chrome(options=chrome_options)
+        
+        # Process specifications into PcPartPicker
+        process_specs(browser, parsed)
+    except Exception:
+        print(traceback.format_exc())
 
-    f = open(os.getcwd() + "/proxy_ext/background.js","w+")
-    f.write(b_js)
-    f.close()
-
-    proxy_extension_path = os.getcwd() + '/proxy_ext'
-    chrome_options.add_argument("--load-extension=" + proxy_extension_path)
-    chrome_options.add_argument('--headless=new')
-    chrome_options.add_argument("--start-maximized")
-    chrome_options.add_argument("user-agent={}".format(user_agent))
-    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
-    chrome_options.add_argument(f"--proxy-server={prox}")
-    browser = uc.Chrome(options=chrome_options)
-    
-    # Process specifications into PcPartPicker
-    process_specs(browser, parsed)
     end = timer()
 
     # Close Selenium Webdriver
