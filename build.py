@@ -108,7 +108,6 @@ def retrieve_pc_specs(url):
               "http://"  : "http://" + PROXY_USER + ":" + PROXY_PASS + "@" + PROXY_HOST + ":" + PROXY_PORT, 
     }
 
-
     try:
         # Send a GET request to the user provided URL
         #res = requests.get(url, headers=headers, verify=True, proxies=pro)
@@ -125,7 +124,6 @@ def retrieve_pc_specs(url):
             '<script type="application/json" id="shop-specifications-[0-9]*-json">(.*?)</script>',
             res.text, re.IGNORECASE)
         j_obj = json.loads(json_string.group(1))
-        print("here3")
 
         # Parse specifications from various categories
         for section in j_obj['specifications']['categories']:
@@ -629,6 +627,7 @@ if __name__ == '__main__':
     # Process specifications into PcPartPicker
     process_specs(browser, parsed)
     end = timer()
+
     # Close Selenium Webdriver
     quit_browser(browser)
     if output_to_console:
