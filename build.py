@@ -115,7 +115,7 @@ def retrieve_pc_specs(url):
             res = client.get(url, headers=headers, timeout=None)
         # Retrieve Price of PC
         price = re.search(
-            'data-testId="customer-price" tabindex="-1"><span aria-hidden="true">\$(.*?)</span>', res.text).group(1)
+            'data-testId="customer-price" tabindex="-1"><span aria-hidden="true">\\$(.*?)</span>', res.text).group(1)
         price = float(price.replace(',', ''))
         specs['general']['price'] = price
         # Search for the specifications in JSON format
@@ -255,7 +255,6 @@ def retrieve_pc_specs(url):
             specs['processor']['full_model_name'] = specs['processor']['model'] + '-' + specs['processor']['model_num']
         else:
             specs['processor']['full_model_name'] = specs['processor']['model'] + ' ' + specs['processor']['model_num']
-        print(specs)
     except Exception:
         print(traceback.format_exc())
     
@@ -497,7 +496,7 @@ def process_specs(browser, specs):
     total = float(
         browser.find_element(By.XPATH, "//tr[@class='tr__total tr__total--final']").text.replace('Total: ', '')[1:])
     result = re.search(
-        "pp_partlist_edit\(\'([a-zA-Z0-9]*)\'\)", browser.page_source)
+        "pp_partlist_edit\(\\'([a-zA-Z0-9]*)\\'\)", browser.page_source)
 
     found_exact = True
     if False in exact_specs_found.values():
@@ -626,7 +625,7 @@ if __name__ == '__main__':
         chrome_options.add_argument("--blink-settings=imagesEnabled=false")
         chrome_options.add_argument(f"--proxy-server={prox}")
 
-        browser = uc.Chrome(options=chrome_options, driver_executable_path="./drivers/chromedriver-linux64/chromedriver")
+        browser = uc.Chrome(options=chrome_options, driver_executable_path="./drivers/chromedriver-linux64/chromedriver", version_main=126)
         
         # Process specifications into PcPartPicker
         process_specs(browser, parsed)
