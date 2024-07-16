@@ -1,6 +1,5 @@
 import json
 import re
-import requests
 import sys
 import undetected_chromedriver as uc
 import os
@@ -41,7 +40,7 @@ exact_specs_found = {'cpu': False, 'gpu': False, 'motherboard': False, 'memory':
 
 # Output JSON for use in web app
 output_json = {'success': False, 'exactPc': False, 'originalPrice': 0, 'newPrice': 0, 'link': ''}
-output_to_console = True
+output_to_console = False
 
 def load_ppp_maps():
     # Load CPU
@@ -439,7 +438,7 @@ def process_specs(browser, specs):
         case "Air" | _:
             query_string += "&W=0"
    
-    url_with_query = "https://pcpartpicker.com/products/internal-hard-drive/#sort=price&R=4,5" + query_string
+    url_with_query = "https://pcpartpicker.com/products/cpu-cooler/#sort=price&R=4,5" + query_string
     if locate_product_and_click("Cooling", url_with_query, browser):
         exact_specs_found['cooling'] = True
         wait_for_webpage(browser, 15, By.XPATH, "//div[@class='partlist__keyMetric']")
@@ -626,7 +625,8 @@ if __name__ == '__main__':
         chrome_options.add_argument("user-agent={}".format(user_agent))
         chrome_options.add_argument("--blink-settings=imagesEnabled=false")
         chrome_options.add_argument(f"--proxy-server={prox}")
-        browser = uc.Chrome(options=chrome_options)
+
+        browser = uc.Chrome(options=chrome_options, driver_executable_path="./drivers/chromedriver-linux64/chromedriver")
         
         # Process specifications into PcPartPicker
         process_specs(browser, parsed)
