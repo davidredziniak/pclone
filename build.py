@@ -1,15 +1,23 @@
 import json
 import re
-import requests
 import sys
 import undetected_chromedriver as uc
 import os
 import dotenv
+import traceback
+import httpx
+
 from timeit import default_timer as timer
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import TimeoutException
+
+# Proxy Settings
+PROXY_HOST = ''
+PROXY_PORT = ''
+PROXY_USER = ''
+PROXY_PASS = ''
 
 # PcPartPicker pre-defined mapping
 cpu_map = {}
@@ -29,6 +37,10 @@ expansion = dict.fromkeys(['pcie_x1', 'pcie_x4', 'pcie_x8', 'pcie_x16', 'interna
 specs = {'general': general, 'processor': processor, 'storage': storage, 'memory': memory, 'graphics': graphics, 'power': power,
              'expansion': expansion}
 exact_specs_found = {'cpu': False, 'gpu': False, 'motherboard': False, 'memory': False, 'ssd': False, 'hdd': False, 'cooling': False, 'case': False, 'psu': False}
+
+# Output JSON for use in web app
+output_json = {'success': False, 'exactPc': False, 'originalPrice': 0, 'newPrice': 0, 'link': ''}
+output_to_console = False
 
 def load_ppp_maps():
     # Load CPU
@@ -70,9 +82,18 @@ def load_ppp_maps():
 def retrieve_pc_specs(url):
     # Define headers for web requests
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept-Language': 'en-US,en;q=0.9'
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Connection': 'keep-alive',
+        'Host': 'www.bestbuy.com',
+        'Priority': 'u=0, i',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'TE': 'trailers',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
     }
     
     # Best Buy specific filtering
@@ -82,168 +103,180 @@ def retrieve_pc_specs(url):
                     'GeForce RTX 3050': 'GeForce RTX 3050 6GB',
                     'GeForce GTX 1650': 'GeForce GTX 1650 G5'}
     
-    # Send a GET request to the user provided URL
-    res = requests.get(url, headers=headers, verify=True)
+    pro = { 
+              "http://"  : "http://" + PROXY_USER + ":" + PROXY_PASS + "@" + PROXY_HOST + ":" + PROXY_PORT, 
+    }
 
-    # Retrieve Price of PC
-    price = re.search(
-        'data-testId="customer-price" tabindex="-1"><span aria-hidden="true">\$(.*?)</span>', res.text).group(1)
-    price = float(price.replace(',', ''))
-    specs['general']['price'] = price
+    try:
+        # Send a GET request to the user provided URL
+        #res = requests.get(url, headers=headers, verify=True, proxies=pro)
+        res = ''
+        with httpx.Client(proxy=pro['http://']) as client:
+            res = client.get(url, headers=headers, timeout=None)
+        # Retrieve Price of PC
+        price = re.search(
+            'data-testId="customer-price" tabindex="-1"><span aria-hidden="true">\$(.*?)</span>', res.text).group(1)
+        price = float(price.replace(',', ''))
+        specs['general']['price'] = price
+        # Search for the specifications in JSON format
+        json_string = re.search(
+            '<script type="application/json" id="shop-specifications-[0-9]*-json">(.*?)</script>',
+            res.text, re.IGNORECASE)
+        j_obj = json.loads(json_string.group(1))
 
-    # Search for the specifications in JSON format
-    json_string = re.search(
-        '<script type="application/json" id="shop-specifications-[0-9]*-json">(.*?)</script>',
-        res.text, re.IGNORECASE)
-    j_obj = json.loads(json_string.group(1))
+        # Parse specifications from various categories
+        for section in j_obj['specifications']['categories']:
+            match section['displayName']:
+                # Find Case Color
+                case "General":
+                    for detail in section['specifications']:
+                        match detail['displayName']:
+                            case "Color Category":
+                                specs['general']['case_color'] = detail['value']
+                # Find CPU Specs    
+                case "Processor":
+                    for detail in section['specifications']:
+                        match detail['displayName']:
+                            case "Processor Brand":
+                                specs['processor']['brand'] = detail['value']
+                            case "Processor Model":
+                                model = detail['value'].split(' ')
+                                for key in cpu_filter['cpu']:
+                                    if key in model:
+                                        model.remove(key)
+                                if "Threadripper" in model:
+                                    model.remove('Ryzen')
+                                specs['processor']['model'] = ' '.join(model)
+                            case "Processor Model Number":
+                                if '-' in detail['value']:
+                                    specs['processor']['model_num'] = detail['value'].split('-')[-1]
+                                else:
+                                    specs['processor']['model_num'] = detail['value'].split(' ')[-1]
+                # Find SSD / HDD
+                case "Storage":
+                    for detail in section['specifications']:
+                        match detail['displayName']:
+                            case "Storage Type":
+                                specs['storage']['type'] = detail['value'].strip().split(',')
+                            case "Hard Drive Capacity":
+                                specs['storage']['hdd_size'] = detail['value'].split(' ')[
+                                    0]
+                            case "Hard Drive RPM":
+                                specs['storage']['hdd_rpm'] = detail['value'].split(' ')[
+                                    0]
+                            case "Solid State Drive Capacity":
+                                specs['storage']['ssd_size'] = detail['value'].split(' ')[
+                                    0]
+                            case "Solid State Drive Interface":
+                                specs['storage']['ssd_interface'] = detail['value'].split(' ')[0]
+                # Find RAM Specs
+                case "Memory":
+                    for detail in section['specifications']:
+                        match detail['displayName']:
+                            case "System Memory (RAM)":
+                                specs['memory']['size'] = detail['value'].split(' ')[0]
+                            case "System Memory RAM Speed":
+                                specs['memory']['clock'] = detail['value'].split(' ')[
+                                    0]
+                            case "Type of Memory (RAM)":
+                                specs['memory']['type'] = detail['value'].split(' ')[0]
+                            case "Number of Memory Sticks Included":
+                                specs['memory']['amount'] = detail['value']
+                # Find Video Card Specs
+                case "Graphics":
+                    for detail in section['specifications']:
+                        match detail['displayName']:
+                            case "Graphics":
+                                # Check if it is dual graphics cards
+                                if "Dual" in detail['value']:
+                                    specs['graphics']['model'] = detail['value'].split(' ', 2)[2]
+                                    specs['graphics']['amount'] = 2
+                                else:
+                                    specs['graphics']['model'] = detail['value'].split(' ', 1)[1]
+                                    specs['graphics']['amount'] = 1
+                            case "GPU Video Memory (RAM)":
+                                specs['graphics']['memory'] = detail['value'].split(' ')[0]
+                # Find if PC has WiFi
+                case "Connectivity":
+                    for detail in section['specifications']:
+                        if detail['displayName'] == "Wireless Connectivity":
+                            if "Wi-Fi" in detail['value']:
+                                specs['general']['wifi'] = True
+                # Find CPU/GPU Cooler Type (Liquid/Air)
+                case "Cooling":
+                    for detail in section['specifications']:
+                        match detail['displayName']:
+                            case "CPU Cooling System":
+                                specs['processor']['cooling'] = detail['value']
+                            case "GPU Cooling System":
+                                specs['graphics']['cooling'] = detail['value']
+                # Find PSU wattage (if specified)
+                case "Power":
+                    for detail in section['specifications']:
+                        if detail['displayName'] == "Power Supply Maximum Wattage":
+                            specs['power']['wattage'] = detail['value'].split(' ')[0]
+                # Find the types and amounts of PCIe slots and storage bays
+                case "Expansion":
+                    for detail in section['specifications']:
+                        match detail['displayName']:
+                            case "Number Of PCI-E x1 Slots":
+                                specs['expansion']['pcie_x1'] = detail['value']
+                            case "Number Of PCI-E x4 Slots":
+                                specs['expansion']['pcie_x4'] = detail['value']
+                            case "Number Of PCI-E x8 Slots":
+                                specs['expansion']['pcie_x8'] = detail['value']
+                            case "Number Of PCI-E x16 Slots":
+                                specs['expansion']['pcie_x16'] = detail['value']
+                            case "Number Of Internal 2.5\" Bays":
+                                specs['expansion']['internal2-5'] = detail['value']
+                            case "Number Of Internal 3.5\" Bays":
+                                specs['expansion']['internal3-5'] = detail['value']
+                            case "Number Of External 3.5 Expansion Bays":
+                                specs['expansion']['external3-5'] = detail['value']
+                            case "Number Of External 5.25 Expansion Bays":
+                                specs['expansion']['external5-25'] = detail['value']
+                            case "Number of M.2 Slots":
+                                specs['expansion']['m2_slots'] = detail['value']
 
-    # Parse specifications from various categories
-    for section in j_obj['specifications']['categories']:
-        match section['displayName']:
-            # Find Case Color
-            case "General":
-                for detail in section['specifications']:
-                    match detail['displayName']:
-                        case "Color Category":
-                            specs['general']['case_color'] = detail['value']
-            # Find CPU Specs    
-            case "Processor":
-                for detail in section['specifications']:
-                    match detail['displayName']:
-                        case "Processor Brand":
-                            specs['processor']['brand'] = detail['value']
-                        case "Processor Model":
-                            model = detail['value'].split(' ')
-                            for key in cpu_filter['cpu']:
-                                if key in model:
-                                    model.remove(key)
-                            if "Threadripper" in model:
-                                model.remove('Ryzen')
-                            specs['processor']['model'] = ' '.join(model)
-                        case "Processor Model Number":
-                            if '-' in detail['value']:
-                                specs['processor']['model_num'] = detail['value'].split('-')[-1]
-                            else:
-                                specs['processor']['model_num'] = detail['value'].split(' ')[-1]
-            # Find SSD / HDD
-            case "Storage":
-                for detail in section['specifications']:
-                    match detail['displayName']:
-                        case "Storage Type":
-                            specs['storage']['type'] = detail['value'].strip().split(',')
-                        case "Hard Drive Capacity":
-                            specs['storage']['hdd_size'] = detail['value'].split(' ')[
-                                0]
-                        case "Hard Drive RPM":
-                            specs['storage']['hdd_rpm'] = detail['value'].split(' ')[
-                                0]
-                        case "Solid State Drive Capacity":
-                            specs['storage']['ssd_size'] = detail['value'].split(' ')[
-                                0]
-                        case "Solid State Drive Interface":
-                            specs['storage']['ssd_interface'] = detail['value'].split(' ')[0]
-            # Find RAM Specs
-            case "Memory":
-                for detail in section['specifications']:
-                    match detail['displayName']:
-                        case "System Memory (RAM)":
-                            specs['memory']['size'] = detail['value'].split(' ')[0]
-                        case "System Memory RAM Speed":
-                            specs['memory']['clock'] = detail['value'].split(' ')[
-                                0]
-                        case "Type of Memory (RAM)":
-                            specs['memory']['type'] = detail['value'].split(' ')[0]
-                        case "Number of Memory Sticks Included":
-                            specs['memory']['amount'] = detail['value']
-            # Find Video Card Specs
-            case "Graphics":
-                for detail in section['specifications']:
-                    match detail['displayName']:
-                        case "Graphics":
-                            # Check if it is dual graphics cards
-                            if "Dual" in detail['value']:
-                                specs['graphics']['model'] = detail['value'].split(' ', 2)[2]
-                                specs['graphics']['amount'] = 2
-                            else:
-                                specs['graphics']['model'] = detail['value'].split(' ', 1)[1]
-                                specs['graphics']['amount'] = 1
-                        case "GPU Video Memory (RAM)":
-                            specs['graphics']['memory'] = detail['value'].split(' ')[0]
-            # Find if PC has WiFi
-            case "Connectivity":
-                for detail in section['specifications']:
-                    if detail['displayName'] == "Wireless Connectivity":
-                        if "Wi-Fi" in detail['value']:
-                            specs['general']['wifi'] = True
-            # Find CPU/GPU Cooler Type (Liquid/Air)
-            case "Cooling":
-                for detail in section['specifications']:
-                    match detail['displayName']:
-                        case "CPU Cooling System":
-                            specs['processor']['cooling'] = detail['value']
-                        case "GPU Cooling System":
-                            specs['graphics']['cooling'] = detail['value']
-            # Find PSU wattage (if specified)
-            case "Power":
-                for detail in section['specifications']:
-                    if detail['displayName'] == "Power Supply Maximum Wattage":
-                        specs['power']['wattage'] = detail['value'].split(' ')[0]
-            # Find the types and amounts of PCIe slots and storage bays
-            case "Expansion":
-                for detail in section['specifications']:
-                    match detail['displayName']:
-                        case "Number Of PCI-E x1 Slots":
-                            specs['expansion']['pcie_x1'] = detail['value']
-                        case "Number Of PCI-E x4 Slots":
-                            specs['expansion']['pcie_x4'] = detail['value']
-                        case "Number Of PCI-E x8 Slots":
-                            specs['expansion']['pcie_x8'] = detail['value']
-                        case "Number Of PCI-E x16 Slots":
-                            specs['expansion']['pcie_x16'] = detail['value']
-                        case "Number Of Internal 2.5\" Bays":
-                            specs['expansion']['internal2-5'] = detail['value']
-                        case "Number Of Internal 3.5\" Bays":
-                            specs['expansion']['internal3-5'] = detail['value']
-                        case "Number Of External 3.5 Expansion Bays":
-                            specs['expansion']['external3-5'] = detail['value']
-                        case "Number Of External 5.25 Expansion Bays":
-                            specs['expansion']['external5-25'] = detail['value']
-                        case "Number of M.2 Slots":
-                            specs['expansion']['m2_slots'] = detail['value']
-
-    # Fix parsed GPUs so it is compatible with PcPartPicker
-    gpu_model = specs['graphics']['model']
-    gpu_memory = specs['graphics']['memory']
-    if gpu_model in gpu_map_fix:
-        if type(gpu_map_fix[gpu_model]) is not dict:
-            specs['graphics']['model'] = gpu_map_fix[gpu_model]
-        else:
-            if gpu_memory in gpu_map_fix[gpu_model]:
-                specs['graphics']['model'] = gpu_map_fix[gpu_model][gpu_memory]
+        # Fix parsed GPUs so it is compatible with PcPartPicker
+        gpu_model = specs['graphics']['model']
+        gpu_memory = specs['graphics']['memory']
+        if gpu_model in gpu_map_fix:
+            if type(gpu_map_fix[gpu_model]) is not dict:
+                specs['graphics']['model'] = gpu_map_fix[gpu_model]
             else:
-                specs['graphics']['model'] = gpu_map_fix[gpu_model]['']
+                if gpu_memory in gpu_map_fix[gpu_model]:
+                    specs['graphics']['model'] = gpu_map_fix[gpu_model][gpu_memory]
+                else:
+                    specs['graphics']['model'] = gpu_map_fix[gpu_model]['']
+        
+        # Fix CPU names
+        if specs['processor']['brand'] == "Intel":
+            specs['processor']['full_model_name'] = specs['processor']['model'] + '-' + specs['processor']['model_num']
+        else:
+            specs['processor']['full_model_name'] = specs['processor']['model'] + ' ' + specs['processor']['model_num']
+        print(specs)
+    except Exception:
+        print(traceback.format_exc())
     
-    # Fix CPU names
-    if specs['processor']['brand'] == "Intel":
-        specs['processor']['full_model_name'] = specs['processor']['model'] + '-' + specs['processor']['model_num']
-    else:
-        specs['processor']['full_model_name'] = specs['processor']['model'] + ' ' + specs['processor']['model_num']
-
     # Output parsed data (DEV)
     #f = open("Parsed.txt", "w")
     #f.write(json.dumps(specs))
     #f.close()
 
-    print("Successfully parsed PC specifications...")
+    if output_to_console:
+        print("Successfully parsed PC specifications...")
     return specs
 
 # Wait for a webpage to load given the exact element conditions in the parameters
 def wait_for_webpage(browser, timeout, type, element):
+
     try:
         WebDriverWait(browser, timeout).until(EC.presence_of_element_located((type, element)))
         return True
     except TimeoutException:
-        print("Loading took too much time!")
+        if output_to_console:
+            print("Loading took too much time!")
         return False
     
 # Exit browser helper function
@@ -254,7 +287,8 @@ def quit_browser(browser, message=""):
 
 # Find a (specified) product and clicks button to add to the build
 def locate_product_and_click(name, url, browser, product_name = None):
-    print("Locating %s..." % name, end='')
+    if output_to_console:
+        print("Locating %s..." % name, end='')
 
     # Go to URL
     browser.get(url)
@@ -269,7 +303,8 @@ def locate_product_and_click(name, url, browser, product_name = None):
             browser.quit()
             exit()
         # No product was found
-        print("Error finding compatible " + name)
+        if output_to_console:
+            print("Error finding compatible " + name)
         return False
     
     # Locate a list of products
@@ -286,7 +321,8 @@ def locate_product_and_click(name, url, browser, product_name = None):
             # Match first product
             button = product.find_element(By.CLASS_NAME, "td__add")
             browser.execute_script("arguments[0].click()", button)
-            print("added")
+            if output_to_console:
+                print("added")
             return True
     
 def process_specs(browser, specs):
@@ -364,7 +400,8 @@ def process_specs(browser, specs):
             case 'SATA':
                 query_string += "&c1=di_m2.sata"
             case _:
-                print("Couldn't find exact SSD interface... choosing a random compatible product")
+                if output_to_console:
+                    print("Couldn't find exact SSD interface... choosing a random compatible product")
 
 
         if specs['storage']['ssd_size'] is not None:
@@ -401,13 +438,12 @@ def process_specs(browser, specs):
         case "Air" | _:
             query_string += "&W=0"
    
-    url_with_query = "https://pcpartpicker.com/products/internal-hard-drive/#sort=price&R=4,5" + query_string
+    url_with_query = "https://pcpartpicker.com/products/cpu-cooler/#sort=price&R=4,5" + query_string
     if locate_product_and_click("Cooling", url_with_query, browser):
         exact_specs_found['cooling'] = True
         wait_for_webpage(browser, 15, By.XPATH, "//div[@class='partlist__keyMetric']")
 
     # Add Case
-    added_case = False
     query_string = ""
 
     # Add expansion specs to query string
@@ -431,7 +467,6 @@ def process_specs(browser, specs):
     # If on home page, get estimated wattage needed to power the PC
     estimated_wattage = ''
     if browser.current_url == "https://pcpartpicker.com/list":
-        print("On home")
         element = browser.find_element(By.CLASS_NAME, "partlist__keyMetric")
         estimated_wattage = element.text.replace("Estimated Wattage: ", "")[:-1]
 
@@ -467,34 +502,42 @@ def process_specs(browser, specs):
     found_exact = True
     if False in exact_specs_found.values():
         found_exact = False
-        
+    
+    link = "https://pcpartpicker.com/list/" + result.group(1)
+
+    # Set output JSON for Next.js
+    output_json['success'] = True
+    output_json['exactPc'] = found_exact
+    output_json['originalPrice'] = float(specs['general']['price'])
+    output_json['newPrice'] = float(total)
+    output_json['link'] = link
+
     # Pass information to output to user
-    output(float(specs['general']['price']), float(total),
-           "https://pcpartpicker.com/list/" + result.group(1), found_exact)
+    output(float(specs['general']['price']), float(total), link, found_exact)
 
 
 def output(original_price, new_price, url, found_exact):
-    if not found_exact:
-        print("\nOriginal: $" + str(original_price))
-        print("Your Total so far: $" + str(new_price))
-        print("\nCouldn't find all matching specs, unable to accurately calculate difference.")
-        print("Feel free to customize:")
-        print(url)
-    else:
-        print("\nOriginal: $" + str(original_price))
-        print("Your Total: $" + str(new_price))
-        print("Difference: $" + str(round(abs(original_price - new_price), 2)))
-        if original_price <= new_price or (original_price - new_price <= 100):
-            print('You will likely not save any money building the PC yourself.')
+    if output_to_console:
+        if not found_exact:
+            print("\nOriginal: $" + str(original_price))
+            print("Your Total so far: $" + str(new_price))
+            print("\nCouldn't find all matching specs, unable to accurately calculate difference.")
+            print("Feel free to customize:")
+            print(url)
         else:
-            print('You can definitely save money building the PC yourself.')
-        print('\nFeel free to customize:')
-        print(url)
-
+            print("\nOriginal: $" + str(original_price))
+            print("Your Total: $" + str(new_price))
+            print("Difference: $" + str(round(abs(original_price - new_price), 2)))
+            if original_price <= new_price or (original_price - new_price <= 100):
+                print('You will likely not save any money building the PC yourself.')
+            else:
+                print('You can definitely save money building the PC yourself.')
+            print('\nFeel free to customize:')
+            print(url)
+    else:
+        print(json.dumps(output_json))
 
 if __name__ == '__main__':
-    proxy_host = ''
-    proxy_port = ''
     url = ''
 
     # Load PPP maps
@@ -511,38 +554,88 @@ if __name__ == '__main__':
     
     # Set proxy host
     if os.getenv("PROXY_HOST"):
-        proxy_host = os.getenv("PROXY_HOST")
+        PROXY_HOST = os.getenv("PROXY_HOST")
     else:
         print("Missing Proxy Host in .env")
         exit()
     
     # Set proxy port
     if os.getenv("PROXY_PORT"):
-        proxy_port = os.getenv("PROXY_PORT")
+        PROXY_PORT = os.getenv("PROXY_PORT")
     else:
         print("Missing Proxy Port in .env")
         exit()
+
+    # Set proxy user
+    if os.getenv("PROXY_USER"):
+        PROXY_USER = os.getenv("PROXY_USER")
+    else:
+        print("Missing Proxy User in .env")
+        exit()
+    
+    # Set proxy pass
+    if os.getenv("PROXY_PASS"):
+        PROXY_PASS = os.getenv("PROXY_PASS")
+    else:
+        print("Missing Proxy Pass in .env")
+        exit()
     
     url = str(sys.argv[1])
-    print("Your URL is: " + url)
+
+    if output_to_console:
+        print("Your URL is: " + url)
     start = timer()
 
     # Parse PC Specs from Bestbuy
-    parsed = retrieve_pc_specs(url)
+    try:
+        parsed = retrieve_pc_specs(url)
+    except Exception:
+        print(traceback.format_exc())
+    
+     # Write background script for extension to file (using updated proxy user + pass)
+    try:
+        b_js = """chrome.webRequest.onAuthRequired.addListener((details, callback) => {
+            callback({
+            authCredentials: {
+                username: '""" + PROXY_USER + """',
+                password: '""" + PROXY_PASS + """'
+            }
+            });
+        },
+        { urls: ["<all_urls>"] },
+        ['asyncBlocking']
+        );"""
+
+        f = open(os.getcwd() + "/proxy_ext/background.js","w+")
+        f.write(b_js)
+        f.close()
+    except Exception:
+        print(traceback.format_exc())
 
     # Create web driver
-    prox = proxy_host + ":" + proxy_port
-    user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36"
-    chrome_options = uc.ChromeOptions()
-    chrome_options.add_argument('--headless=new')
-    chrome_options.add_argument("--start-maximized")
-    chrome_options.add_argument("user-agent={}".format(user_agent))
-    chrome_options.add_argument(f"--proxy-server={prox}")
-    browser = uc.Chrome(options=chrome_options)
-    
-    # Process specifications into PcPartPicker
-    process_specs(browser, parsed)
+    try:
+        prox = PROXY_HOST + ":" + PROXY_PORT
+        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36"
+        chrome_options = uc.options.ChromeOptions()
+
+        proxy_extension_path = os.getcwd() + '/proxy_ext'
+        chrome_options.add_argument("--load-extension=" + proxy_extension_path)
+        chrome_options.add_argument('--headless=new')
+        chrome_options.add_argument("--start-maximized")
+        chrome_options.add_argument("user-agent={}".format(user_agent))
+        chrome_options.add_argument("--blink-settings=imagesEnabled=false")
+        chrome_options.add_argument(f"--proxy-server={prox}")
+
+        browser = uc.Chrome(options=chrome_options, driver_executable_path="./drivers/chromedriver-linux64/chromedriver")
+        
+        # Process specifications into PcPartPicker
+        process_specs(browser, parsed)
+    except Exception:
+        print(traceback.format_exc())
+
     end = timer()
+
     # Close Selenium Webdriver
     quit_browser(browser)
-    print('\nTime elapsed: %s seconds.' % str(round(end - start, 2)))
+    if output_to_console:
+        print('\nTime elapsed: %s seconds.' % str(round(end - start, 2)))

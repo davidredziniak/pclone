@@ -45,3 +45,4 @@ Example
 
 Updates:
 - 07/05/24: Refactor code, add proxies, move away from geckodriver to use undetected chromedriver
+- 07/12/24: Expand to Next.js web app, add proxy authentication, pending deployment
