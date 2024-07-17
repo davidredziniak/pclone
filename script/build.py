@@ -1,6 +1,7 @@
 import json
 import re
 import sys
+import time
 import undetected_chromedriver as uc
 import os
 import dotenv
@@ -19,6 +20,9 @@ PROXY_PORT = ''
 PROXY_USER = ''
 PROXY_PASS = ''
 
+# OS Settings
+linux = True
+
 # PcPartPicker pre-defined mapping
 cpu_map = {}
 case_map = {}
@@ -34,6 +38,8 @@ memory = dict.fromkeys(['type', 'size', 'clock', 'amount'])
 graphics = dict.fromkeys(['model', 'amount', 'memory', 'cooling'])
 power = dict.fromkeys(['wattage'])
 expansion = dict.fromkeys(['pcie_x1', 'pcie_x4', 'pcie_x8', 'pcie_x16', 'internal2-5', 'internal3-5', 'external3-5', 'external5-25', 'm2_slots'])
+
+# Define dictionaries required for building
 specs = {'general': general, 'processor': processor, 'storage': storage, 'memory': memory, 'graphics': graphics, 'power': power,
              'expansion': expansion}
 exact_specs_found = {'cpu': False, 'gpu': False, 'motherboard': False, 'memory': False, 'ssd': False, 'hdd': False, 'cooling': False, 'case': False, 'psu': False}
@@ -44,40 +50,82 @@ output_to_console = False
 
 def load_ppp_maps():
     # Load CPU
-    with open('./pcpartpicker/cpu.txt', 'r') as _:
+    with open('./script/pcpartpicker/cpu.txt', 'r') as _:
         for line in _:
             line = line.strip()
             if line:
                 key, value = line.split(':')
                 cpu_map[str(key)] = str(value)
     # Load Case
-    with open('./pcpartpicker/case.txt', 'r') as _:
+    with open('./script/pcpartpicker/case.txt', 'r') as _:
         for line in _:
             line = line.strip()
             if line:
                 key, value = line.split(':')
                 case_map[str(key)] = str(value)
     # Load Motherboard
-    with open('./pcpartpicker/motherboard.txt', 'r') as _:
+    with open('./script/pcpartpicker/motherboard.txt', 'r') as _:
         for line in _:
             line = line.strip()
             if line:
                 key, value = line.split(':')
                 mobo_map[str(key)] = str(value)
     # Load Memory
-    with open('./pcpartpicker/memory.txt', 'r') as _:
+    with open('./script/pcpartpicker/memory.txt', 'r') as _:
         for line in _:
             line = line.strip()
             if line:
                 key, value = line.split(':')
                 mem_map[str(key)] = str(value)
     # Load GPU
-    with open('./pcpartpicker/gpu.txt', 'r') as _:
+    with open('./script/pcpartpicker/gpu.txt', 'r') as _:
         for line in _:
             line = line.strip()
             if line:
                 key, value = line.split(':')
                 gpu_map[str(key)] = str(value)
+
+def load_env():
+    # Load .env environmental variables
+    dotenv_file = dotenv.find_dotenv(usecwd=True)
+    dotenv.load_dotenv(dotenv_file)
+
+    # Check if a URL was provided
+    if len(sys.argv) < 2:
+        print('Missing URL.')
+        exit(0)
+    
+    # Set proxy host
+    if os.getenv("PROXY_HOST"):
+        global PROXY_HOST 
+        PROXY_HOST = os.getenv("PROXY_HOST")
+    else:
+        print("Missing Proxy Host in .env")
+        exit()
+    
+    # Set proxy port
+    if os.getenv("PROXY_PORT"):
+        global PROXY_PORT 
+        PROXY_PORT = os.getenv("PROXY_PORT")
+    else:
+        print("Missing Proxy Port in .env")
+        exit()
+
+    # Set proxy user
+    if os.getenv("PROXY_USER"):
+        global PROXY_USER
+        PROXY_USER = os.getenv("PROXY_USER")
+    else:
+        print("Missing Proxy User in .env")
+        exit()
+    
+    # Set proxy pass
+    if os.getenv("PROXY_PASS"):
+        global PROXY_PASS
+        PROXY_PASS = os.getenv("PROXY_PASS")
+    else:
+        print("Missing Proxy Pass in .env")
+        exit()
 
 def retrieve_pc_specs(url):
     # Define headers for web requests
@@ -102,22 +150,25 @@ def retrieve_pc_specs(url):
                     'GeForce RTX 3060': {'': 'GeForce RTX 3060 8GB', '8': 'GeForce RTX 3060 8GB', '12': 'GeForce RTX 3060 12GB'},
                     'GeForce RTX 3050': 'GeForce RTX 3050 6GB',
                     'GeForce GTX 1650': 'GeForce GTX 1650 G5'}
-    
-    pro = { 
-              "http://"  : "http://" + PROXY_USER + ":" + PROXY_PASS + "@" + PROXY_HOST + ":" + PROXY_PORT, 
-    }
 
     try:
+        global specs
+        pro = { 
+            "http://"  : "http://" + PROXY_USER + ":" + PROXY_PASS + "@" + PROXY_HOST + ":" + PROXY_PORT
+        }
+            
         # Send a GET request to the user provided URL
         #res = requests.get(url, headers=headers, verify=True, proxies=pro)
         res = ''
         with httpx.Client(proxy=pro['http://']) as client:
             res = client.get(url, headers=headers, timeout=None)
+
         # Retrieve Price of PC
         price = re.search(
             'data-testId="customer-price" tabindex="-1"><span aria-hidden="true">\\$(.*?)</span>', res.text).group(1)
         price = float(price.replace(',', ''))
         specs['general']['price'] = price
+
         # Search for the specifications in JSON format
         json_string = re.search(
             '<script type="application/json" id="shop-specifications-[0-9]*-json">(.*?)</script>',
@@ -255,8 +306,10 @@ def retrieve_pc_specs(url):
             specs['processor']['full_model_name'] = specs['processor']['model'] + '-' + specs['processor']['model_num']
         else:
             specs['processor']['full_model_name'] = specs['processor']['model'] + ' ' + specs['processor']['model_num']
+        
     except Exception:
         print(traceback.format_exc())
+        return False
     
     # Output parsed data (DEV)
     #f = open("Parsed.txt", "w")
@@ -265,11 +318,10 @@ def retrieve_pc_specs(url):
 
     if output_to_console:
         print("Successfully parsed PC specifications...")
-    return specs
+    return True
 
 # Wait for a webpage to load given the exact element conditions in the parameters
 def wait_for_webpage(browser, timeout, type, element):
-
     try:
         WebDriverWait(browser, timeout).until(EC.presence_of_element_located((type, element)))
         return True
@@ -496,7 +548,7 @@ def process_specs(browser, specs):
     total = float(
         browser.find_element(By.XPATH, "//tr[@class='tr__total tr__total--final']").text.replace('Total: ', '')[1:])
     result = re.search(
-        "pp_partlist_edit\(\\'([a-zA-Z0-9]*)\\'\)", browser.page_source)
+        "pp_partlist_edit\\(\\'([a-zA-Z0-9]*)\\'\\)", browser.page_source)
 
     found_exact = True
     if False in exact_specs_found.values():
@@ -514,11 +566,10 @@ def process_specs(browser, specs):
     # Pass information to output to user
     output(float(specs['general']['price']), float(total), link, found_exact)
 
-
 def output(original_price, new_price, url, found_exact):
     if output_to_console:
+        print("\nOriginal: $" + str(original_price))
         if not found_exact:
-            print("\nOriginal: $" + str(original_price))
             print("Your Total so far: $" + str(new_price))
             print("\nCouldn't find all matching specs, unable to accurately calculate difference.")
             print("Feel free to customize:")
@@ -536,105 +587,80 @@ def output(original_price, new_price, url, found_exact):
     else:
         print(json.dumps(output_json))
 
+def get_driver():
+    prox = PROXY_HOST + ":" + PROXY_PORT
+    user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36"
+    chrome_options = uc.options.ChromeOptions()
+
+    proxy_extension_path = './script/proxy_ext'
+    chrome_options.add_argument("--load-extension=" + proxy_extension_path)
+    chrome_options.add_argument('--headless=new')
+    chrome_options.add_argument("--start-maximized")
+    chrome_options.add_argument("user-agent={}".format(user_agent))
+    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
+    chrome_options.add_argument(f"--proxy-server={prox}")
+
+    return uc.Chrome(options=chrome_options, driver_executable_path="./script/drivers/chromedriver-linux64/chromedriver", version_main=126) if linux else uc.Chrome(options=chrome_options)
+
 if __name__ == '__main__':
-    url = ''
 
-    # Load PPP maps
-    load_ppp_maps()
+    try:
+        # Load PPP maps
+        load_ppp_maps()
 
-    # Load .env environmental variables
-    dotenv_file = dotenv.find_dotenv(usecwd=True)
-    dotenv.load_dotenv(dotenv_file)
-    
-    # Check if a URL was provided
-    if len(sys.argv) < 2:
-        print('Missing URL.')
-        exit(0)
-    
-    # Set proxy host
-    if os.getenv("PROXY_HOST"):
-        PROXY_HOST = os.getenv("PROXY_HOST")
-    else:
-        print("Missing Proxy Host in .env")
-        exit()
-    
-    # Set proxy port
-    if os.getenv("PROXY_PORT"):
-        PROXY_PORT = os.getenv("PROXY_PORT")
-    else:
-        print("Missing Proxy Port in .env")
-        exit()
+        # Load Proxy info from .env
+        load_env()
+    except Exception:
+        print(traceback.format_exc())
 
-    # Set proxy user
-    if os.getenv("PROXY_USER"):
-        PROXY_USER = os.getenv("PROXY_USER")
-    else:
-        print("Missing Proxy User in .env")
-        exit()
-    
-    # Set proxy pass
-    if os.getenv("PROXY_PASS"):
-        PROXY_PASS = os.getenv("PROXY_PASS")
-    else:
-        print("Missing Proxy Pass in .env")
-        exit()
-    
     url = str(sys.argv[1])
 
     if output_to_console:
         print("Your URL is: " + url)
-    start = timer()
+    #start = timer()
 
     # Parse PC Specs from Bestbuy
-    try:
-        parsed = retrieve_pc_specs(url)
-    except Exception:
-        print(traceback.format_exc())
+    retrieve_pc_specs(url)
     
      # Write background script for extension to file (using updated proxy user + pass)
-    try:
-        b_js = """chrome.webRequest.onAuthRequired.addListener((details, callback) => {
-            callback({
-            authCredentials: {
-                username: '""" + PROXY_USER + """',
-                password: '""" + PROXY_PASS + """'
-            }
-            });
-        },
-        { urls: ["<all_urls>"] },
-        ['asyncBlocking']
-        );"""
+    if not os.path.isfile("./script/proxy_ext/background.js"):
+        try:
+            b_js = """chrome.webRequest.onAuthRequired.addListener((details, callback) => {
+                callback({
+                authCredentials: {
+                    username: '""" + PROXY_USER + """',
+                    password: '""" + PROXY_PASS + """'
+                }
+                });
+            },
+            { urls: ["<all_urls>"] },
+            ['asyncBlocking']
+            );"""
 
-        f = open(os.getcwd() + "/proxy_ext/background.js","w+")
-        f.write(b_js)
-        f.close()
-    except Exception:
-        print(traceback.format_exc())
+            f = open("./script/proxy_ext/background.js","w+")
+            f.write(b_js)
+            f.close()
+        except Exception:
+            print("Couldn't create chrome extension.")
 
     # Create web driver
+    driver = None
     try:
-        prox = PROXY_HOST + ":" + PROXY_PORT
-        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36"
-        chrome_options = uc.options.ChromeOptions()
+        driver = get_driver()
+        if driver:
+            time.sleep(1)
+            # Process specifications into PcPartPicker
+            process_specs(driver, specs)
 
-        proxy_extension_path = os.getcwd() + '/proxy_ext'
-        chrome_options.add_argument("--load-extension=" + proxy_extension_path)
-        chrome_options.add_argument('--headless=new')
-        chrome_options.add_argument("--start-maximized")
-        chrome_options.add_argument("user-agent={}".format(user_agent))
-        chrome_options.add_argument("--blink-settings=imagesEnabled=false")
-        chrome_options.add_argument(f"--proxy-server={prox}")
-
-        browser = uc.Chrome(options=chrome_options, driver_executable_path="./drivers/chromedriver-linux64/chromedriver", version_main=126)
-        
-        # Process specifications into PcPartPicker
-        process_specs(browser, parsed)
+            # Quit
+            quit_browser(driver)
+        else:
+            print("Driver could not be created.")
     except Exception:
         print(traceback.format_exc())
 
-    end = timer()
+    #end = timer()
 
     # Close Selenium Webdriver
-    quit_browser(browser)
-    if output_to_console:
-        print('\nTime elapsed: %s seconds.' % str(round(end - start, 2)))
+    #if output_to_console:
+    #    print('\nTime elapsed: %s seconds.' % str(round(end - start, 2)))
