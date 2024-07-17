@@ -16,18 +16,16 @@ export async function GET(request: Request) {
   }
 
   // Run the pcpartpicker script with user provided URL
-  let python = spawn('python', ['build.py', pc]);
+  let python = spawn('python3', ['./script/build.py', pc]);
   let dataToSend = '';
 
   for await (const data of python.stdout){
     dataToSend += data.toString();
   }
   
-  return Response.json({ success: false, message: dataToSend }, { status: 404 });
-
   // Python output was empty, some error occured
   if (dataToSend.length === 0){
-    return Response.json({ success: false, message: "There was an error processing this link." }, { status: 404 });
+    return Response.json({ success: false, message: dataToSend }, { status: 404 });
   }
 
   // Convert python output to JSON object
@@ -36,12 +34,7 @@ export async function GET(request: Request) {
   try {
     jsonData = JSON.parse(dataToSend) as JSON;
   } catch(error: any){
-    return Response.json({ success: false, message: error.message }, { status: 404 });
+    return Response.json({ success: false, message: dataToSend }, { status: 404 });
   }
-
-  //let pythonResponse = "{\"success\": true, \"exactPc\": false, \"originalPrice\": 699.99, \"newPrice\": 473.79, \"link\": \"https://pcpartpicker.com/list/s3wRcH\"}\r\n";
-  
-  //let someData: JSON = JSON.parse(pythonResponse) as JSON;
-
   return Response.json(jsonData);
 }
