@@ -321,20 +321,21 @@ def retrieve_pc_specs(url):
     return True
 
 # Wait for a webpage to load given the exact element conditions in the parameters
-def wait_for_webpage(browser, timeout, type, element):
+def wait_for_webpage(browser, timeout, type, element, message=""):
     try:
         WebDriverWait(browser, timeout).until(EC.presence_of_element_located((type, element)))
         return True
     except TimeoutException:
-        if output_to_console:
-            print("Loading took too much time!")
+        # Quit browser to prevent memory leaks
+        quit_browser(browser, message)
         return False
     
 # Exit browser helper function
 def quit_browser(browser, message=""):
-    if message != "":
+    if message != "" and output_to_console:
         print(message)
     browser.quit()
+    exit()
 
 # Find a (specified) product and clicks button to add to the build
 def locate_product_and_click(name, url, browser, product_name = None):
@@ -350,9 +351,7 @@ def locate_product_and_click(name, url, browser, product_name = None):
             EC.visibility_of_element_located((By.XPATH, "//table[@id='paginated_table']//tbody[@id='category_content']//tr")))
     except TimeoutException:
         if name == "CPU":
-            print("Cannot continue without CPU.. Exiting")
-            browser.quit()
-            exit()
+            quit_browser(browser, "Cannot continue without CPU.. Exiting")
         # No product was found
         if output_to_console:
             print("Error finding compatible " + name)
@@ -381,8 +380,7 @@ def process_specs(browser, specs):
     browser.get("https://pcpartpicker.com/list")
 
     # Wait for page load (locates if footer exists in DOM)
-    if not wait_for_webpage(browser, 15, By.CLASS_NAME, "footer__copyright"):
-        quit_browser(browser, "Webpage did not load. Exiting")
+    wait_for_webpage(browser, 15, By.CLASS_NAME, "footer__copyright", "Initial page took too much time to load.")
 
     # Add CPU. Matches CPU generation and picks listing with a price tag.
     url_with_query = "https://pcpartpicker.com/products/cpu/#s=" + cpu_map[specs['processor']['model']]
@@ -396,6 +394,19 @@ def process_specs(browser, specs):
     url_with_query = "https://pcpartpicker.com/products/video-card/#sort=price&c=" + gpu_map[specs['graphics']['model']]
     if locate_product_and_click("GPU", url_with_query, browser):
         exact_specs_found['gpu'] = True
+        wait_for_webpage(browser, 15, By.XPATH, "//div[@class='partlist__keyMetric']")
+
+    # Add Memory
+    query_string = ""
+
+    if specs['memory']['clock'] is not None:
+        query_string += '&S=%s' % specs['memory']['clock']
+    if mem_map[specs['memory']['size']] is not None:
+        query_string += "&Z=" + mem_map[specs['memory']['size']]
+
+    url_with_query = "https://pcpartpicker.com/products/memory/#sort=price&R=4,5" + query_string
+    if locate_product_and_click('Memory', url_with_query, browser):
+        exact_specs_found['memory'] = True
         wait_for_webpage(browser, 15, By.XPATH, "//div[@class='partlist__keyMetric']")
 
     # Add Motherboard. Matches M2 Slots, Wifi (Yes/No), PCIe slots
@@ -421,19 +432,6 @@ def process_specs(browser, specs):
         exact_specs_found['motherboard'] = True
         wait_for_webpage(browser, 15, By.XPATH, "//div[@class='partlist__keyMetric']")
 
-    # Add Memory
-    query_string = ""
-
-    if specs['memory']['clock'] is not None:
-        query_string += '&S=%s' % specs['memory']['clock']
-    if mem_map[specs['memory']['size']] is not None:
-        query_string += "&Z=" + mem_map[specs['memory']['size']]
-
-    url_with_query = "https://pcpartpicker.com/products/memory/#sort=price&R=4,5" + query_string
-    if locate_product_and_click('Memory', url_with_query, browser):
-        exact_specs_found['memory'] = True
-        wait_for_webpage(browser, 15, By.XPATH, "//div[@class='partlist__keyMetric']")
-
     # Add SSD, default to m2 form factor
     if 'SSD' in specs['storage']['type']:
         query_string = "&t=0"
@@ -441,7 +439,6 @@ def process_specs(browser, specs):
         # If NVMe protocol is specified, it is PCIe interface
         if specs['storage']['ssd_interface'] == "NVMe":
             query_string += "&D=1&c1=di_m2.pcie_20_x4,di_m2.pcie_30_x2,di_m2.pcie_30_x4,di_m2.pcie_40_x4,di_m2.pcie_40_x8,di_m2.pcie_50_x2,di_m2.pcie_50_x4"
-
         
         match specs['storage']['ssd_interface']:
             case "NVMe":
