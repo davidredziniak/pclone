@@ -49,6 +49,12 @@ output_json = {'success': False, 'exactPc': False, 'originalPrice': 0, 'newPrice
 output_to_console = False
 
 def load_ppp_maps():
+    """
+    Loads data from five text files into dictionaries (`cpu_map`, `case_map`,
+    `mobo_map`, `mem_map`, and `gpu_map`). The data is read line by line, stripped
+    of leading/trailing whitespace, and split into key-value pairs.
+
+    """
     # Load CPU
     with open('./script/pcpartpicker/cpu.txt', 'r') as _:
         for line in _:
@@ -86,6 +92,13 @@ def load_ppp_maps():
                 gpu_map[str(key)] = str(value)
 
 def load_env():
+    """
+    Loads environment variables from a `.env` file, checks for required command-line
+    arguments and proxy settings, and sets global variables based on these
+    configurations if they exist. It exits with an error message if any setting
+    is missing.
+
+    """
     # Load .env environmental variables
     dotenv_file = dotenv.find_dotenv(usecwd=True)
     dotenv.load_dotenv(dotenv_file)
@@ -128,6 +141,21 @@ def load_env():
         exit()
 
 def retrieve_pc_specs(url):
+    """
+    Scrapes product details from a Best Buy webpage, parsing general information
+    such as price and technical specs like processor model, memory, graphics card,
+    storage, and cooling systems into a structured dictionary called `specs`.
+
+    Args:
+        url (str): Expected to be a URL that corresponds to a product page on
+            bestbuy.com, from which PC specifications will be retrieved.
+
+    Returns:
+        bool: True upon successful parsing and extraction of PC specifications
+        from a given URL, and False otherwise. The extracted specs are stored
+        globally in the 'specs' dictionary.
+
+    """
     # Define headers for web requests
     headers = {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.8',
@@ -322,6 +350,30 @@ def retrieve_pc_specs(url):
 
 # Wait for a webpage to load given the exact element conditions in the parameters
 def wait_for_webpage(browser, timeout, type, element):
+    """
+    Uses Selenium WebDriver to wait for a specified element on a webpage to become
+    visible within a given timeout period. It returns True if the element is found
+    before the timeout, and False otherwise.
+
+    Args:
+        browser (WebDriver | SeleniumRemoteConnection): Presumably an instance of
+            a web browser automation interface, such as ChromeDriver or FirefoxDriver,
+            used for interacting with a webpage.
+        timeout (int): 1: used to specify a maximum wait duration in seconds for
+            an element to become visible on the webpage.
+        type (By): Used to locate an element on a web page using Selenium WebDriver's
+            By class, which provides methods to specify how elements are located
+            by the driver.
+        element (By): Passed to the `EC.presence_of_element_located()` method,
+            which expects a tuple containing a By type and an element identifier
+            as arguments.
+
+    Returns:
+        bool: True when the element is found within the specified timeout, and
+        False otherwise, indicating a timeout exception occurred or an error
+        occurred while waiting for the webpage to load.
+
+    """
     try:
         WebDriverWait(browser, timeout).until(EC.presence_of_element_located((type, element)))
         return True
@@ -332,12 +384,49 @@ def wait_for_webpage(browser, timeout, type, element):
     
 # Exit browser helper function
 def quit_browser(browser, message=""):
+    """
+    Closes a web browser session. It takes two arguments: `browser`, which is an
+    instance of a web browser, and `message`, an optional string to print before
+    quitting. If `message` is not empty, it prints the message before closing the
+    browser.
+
+    Args:
+        browser (Browser | None): Required to be provided by the caller, indicating
+            that it represents an instance of a web browser being controlled by
+            automation software.
+        message (str | None): 0 by default. It specifies an optional message to
+            be printed before closing the browser, which can be customized using
+            string input.
+
+    """
     if message != "":
         print(message)
     browser.quit()
 
 # Find a (specified) product and clicks button to add to the build
 def locate_product_and_click(name, url, browser, product_name = None):
+    """
+    Navigates to a webpage, locates an element with specific data based on name
+    or product ID, clicks the "add" button for that product, and returns True upon
+    successful execution. It handles exceptions for timeouts and incompatible products.
+
+    Args:
+        name (str | None): Used to display a message to the console during product
+            locating, specifying what product is being located. It defaults to
+            None if not provided.
+        url (str): Expected to be a web URL that the browser will navigate to in
+            order to locate the product specified by the other parameters.
+        browser (WebDriver): Presumably an instance of a class that represents a
+            web browser, allowing it to interact with the web page being navigated.
+        product_name (str | None): Optional by default. It specifies the name of
+            the product to locate and add, allowing for a specific product to be
+            targeted instead of all matching products.
+
+    Returns:
+        bool: True when a product is successfully located and added to cart,
+        otherwise it returns False due to timeout or other issues.
+
+    """
     if output_to_console:
         print("Locating %s..." % name, end='')
 
@@ -377,6 +466,20 @@ def locate_product_and_click(name, url, browser, product_name = None):
             return True
     
 def process_specs(browser, specs):
+    """
+    Automates PC part selection on pcpartpicker.com by filtering components based
+    on user-specified specifications and creating a custom build list with estimated
+    costs. It extracts component links, prices, and exact matches found.
+
+    Args:
+        browser (WebDriver): Used to interact with a web browser for automation
+            purposes such as navigating URLs and locating elements on the webpage.
+        specs (Dict[str, Any | List[Any]]): Used to represent system specifications
+            for building or purchasing. It contains key-value pairs describing
+            various components such as processor, memory, storage, cooling, power
+            supply, motherboard, case, etc.
+
+    """
     # Begin process by going to pcpartpicker build homepage
     browser.get("https://pcpartpicker.com/list")
 
@@ -567,6 +670,24 @@ def process_specs(browser, specs):
     output(float(specs['general']['price']), float(total), link, found_exact)
 
 def output(original_price, new_price, url, found_exact):
+    """
+    Prints a message to the console based on user preferences and input parameters,
+    comparing an original price with a new price and displaying information about
+    potential savings or differences.
+
+    Args:
+        original_price (float | int): Required, representing the original price
+            of a PC or product from an online store or website. Its value is used
+            to calculate differences with new prices.
+        new_price (float): Not calculated within the function, its purpose is to
+            display the total cost so far after potentially making changes.
+        url (str): Passed as an argument to the function, likely representing the
+            URL where users can customize their PC build or explore more options.
+        found_exact (bool): Used to determine whether the exact matching specs for
+            the PC build have been found or not. Its value is likely set based on
+            a prior comparison between desired and actual PC specifications.
+
+    """
     if output_to_console:
         print("\nOriginal: $" + str(original_price))
         if not found_exact:
@@ -588,6 +709,18 @@ def output(original_price, new_price, url, found_exact):
         print(json.dumps(output_json))
 
 def get_driver():
+    """
+    Initializes and returns a Chrome driver instance with specified options,
+    including proxy settings, user agent, and browser configuration. The instance
+    is created using either the Linux or standard version of the driver based on
+    the operating system.
+
+    Returns:
+        Chrome: A browser driver instance with specified options and settings
+        applied for use in web scraping or automation tasks, customized according
+        to the operating system.
+
+    """
     prox = PROXY_HOST + ":" + PROXY_PORT
     user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36"
     chrome_options = uc.options.ChromeOptions()
