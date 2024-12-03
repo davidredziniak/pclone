@@ -21,7 +21,7 @@ PROXY_USER = ''
 PROXY_PASS = ''
 
 # OS Settings
-linux = True
+linux = False
 
 # PcPartPicker pre-defined mapping
 cpu_map = {}
@@ -46,39 +46,39 @@ exact_specs_found = {'cpu': False, 'gpu': False, 'motherboard': False, 'memory':
 
 # Output JSON for use in web app
 output_json = {'success': False, 'exactPc': False, 'originalPrice': 0, 'newPrice': 0, 'link': ''}
-output_to_console = False
+output_to_console = True
 
 def load_ppp_maps():
     # Load CPU
-    with open('./script/pcpartpicker/cpu.txt', 'r') as _:
+    with open('./pcpartpicker/cpu.txt', 'r') as _:
         for line in _:
             line = line.strip()
             if line:
                 key, value = line.split(':')
                 cpu_map[str(key)] = str(value)
     # Load Case
-    with open('./script/pcpartpicker/case.txt', 'r') as _:
+    with open('./pcpartpicker/case.txt', 'r') as _:
         for line in _:
             line = line.strip()
             if line:
                 key, value = line.split(':')
                 case_map[str(key)] = str(value)
     # Load Motherboard
-    with open('./script/pcpartpicker/motherboard.txt', 'r') as _:
+    with open('./pcpartpicker/motherboard.txt', 'r') as _:
         for line in _:
             line = line.strip()
             if line:
                 key, value = line.split(':')
                 mobo_map[str(key)] = str(value)
     # Load Memory
-    with open('./script/pcpartpicker/memory.txt', 'r') as _:
+    with open('./pcpartpicker/memory.txt', 'r') as _:
         for line in _:
             line = line.strip()
             if line:
                 key, value = line.split(':')
                 mem_map[str(key)] = str(value)
     # Load GPU
-    with open('./script/pcpartpicker/gpu.txt', 'r') as _:
+    with open('./pcpartpicker/gpu.txt', 'r') as _:
         for line in _:
             line = line.strip()
             if line:
@@ -337,43 +337,60 @@ def quit_browser(browser, message=""):
     browser.quit()
     exit()
 
-# Find a (specified) product and clicks button to add to the build
-def locate_product_and_click(name, url, browser, product_name = None):
-    if output_to_console:
-        print("Locating %s..." % name, end='')
+"""
+Locate a specified product on a page and click the button to add it to the build.
 
-    # Go to URL
+Args:
+    product_type (str): Type of the product being searched (e.g., "CPU").
+    url (str): URL of the page to search.
+    browser (webdriver): Selenium WebDriver instance.
+    product_name (str, optional): Specific name of the product to find. Defaults to None.
+    output_to_console (bool, optional): Whether to print messages to the console. Defaults to True.
+
+Returns:
+    bool: True if the product is found and added; False otherwise.
+"""
+def locate_product_and_click(product_type, url, browser, product_name=None, output_to_console=True):
+    if output_to_console:
+        print(f"Locating {product_type}...", end='')
+
+    # Navigate to the specified URL
     browser.get(url)
 
-    # Wait until table is loaded
+    # Wait for the table to load
     try:
         WebDriverWait(browser, 15).until(
-            EC.visibility_of_element_located((By.XPATH, "//table[@id='paginated_table']//tbody[@id='category_content']//tr")))
+            EC.visibility_of_element_located((By.XPATH, "//table[@id='paginated_table']//tbody[@id='category_content']//tr"))
+        )
     except TimeoutException:
-        if name == "CPU":
-            quit_browser(browser, "Cannot continue without CPU.. Exiting")
-        # No product was found
+        if product_type == "CPU":
+            quit_browser(browser, "Cannot continue without CPU. Exiting.")
         if output_to_console:
-            print("Error finding compatible " + name)
+            print(f"Error: Failed to locate compatible {product_type}.")
         return False
-    
-    # Locate a list of products
+
+    # Locate the list of products in the table
     products = browser.find_elements(By.XPATH, "//table[@id='paginated_table']//tbody[@id='category_content']//tr")
     for product in products:
-        # Extract name of product
-        name = product.find_element(By.TAG_NAME, "p").text
-        price = product.find_element(By.CLASS_NAME, "td__price")
-            
-        # Match exact product name if parameter is given
-        if product_name is not None and name != product_name:
+        # Extract product details
+        product_name_in_table = product.find_element(By.TAG_NAME, "p").text
+        product_price = product.find_element(By.CLASS_NAME, "td__price").text
+
+        # Match the specific product name if provided
+        if product_name and product_name != product_name_in_table:
             continue
-        else:
-            # Match first product
-            button = product.find_element(By.CLASS_NAME, "td__add")
-            browser.execute_script("arguments[0].click()", button)
-            if output_to_console:
-                print("added")
-            return True
+
+        # Otherwise, select the first matching product
+        add_button = product.find_element(By.CLASS_NAME, "td__add")
+        browser.execute_script("arguments[0].click()", add_button)
+        if output_to_console:
+            print(" added.")
+        return True
+
+    # If no product was added
+    if output_to_console:
+        print(f"Error: No matching {product_type} found.")
+    return False
     
 def process_specs(browser, specs):
     # Begin process by going to pcpartpicker build homepage
@@ -382,112 +399,94 @@ def process_specs(browser, specs):
     # Wait for page load (locates if footer exists in DOM)
     wait_for_webpage(browser, 15, By.CLASS_NAME, "footer__copyright", "Initial page took too much time to load.")
 
-    # Add CPU. Matches CPU generation and picks listing with a price tag.
-    url_with_query = "https://pcpartpicker.com/products/cpu/#s=" + cpu_map[specs['processor']['model']]
-
-    # Locate product, if found wait until /list loads
-    if locate_product_and_click("CPU", url_with_query, browser, product_name=specs['processor']['full_model_name']):
+   # Add CPU: Matches CPU generation and selects the listing with a price tag
+    cpu_url = f"https://pcpartpicker.com/products/cpu/#s={cpu_map[specs['processor']['model']]}"
+    if locate_product_and_click("CPU", cpu_url, browser, product_name=specs['processor']['full_model_name']):
         exact_specs_found['cpu'] = True
         wait_for_webpage(browser, 15, By.XPATH, "//div[@class='partlist__keyMetric']")
 
-    # Add GPU. Matches chipset and finds cheapest card.
-    url_with_query = "https://pcpartpicker.com/products/video-card/#sort=price&c=" + gpu_map[specs['graphics']['model']]
-    if locate_product_and_click("GPU", url_with_query, browser):
+    # Add GPU: Matches chipset and finds the cheapest option
+    gpu_url = f"https://pcpartpicker.com/products/video-card/#sort=price&c={gpu_map[specs['graphics']['model']]}"
+    if locate_product_and_click("GPU", gpu_url, browser):
         exact_specs_found['gpu'] = True
         wait_for_webpage(browser, 15, By.XPATH, "//div[@class='partlist__keyMetric']")
 
-    # Add Memory
-    query_string = ""
+    # Add Memory: Matches clock speed and size
+    memory_query = ""
+    if specs['memory']['clock']:
+        memory_query += f"&S={specs['memory']['clock']}"
+    if mem_map.get(specs['memory']['size']):
+        memory_query += f"&Z={mem_map[specs['memory']['size']]}"
 
-    if specs['memory']['clock'] is not None:
-        query_string += '&S=%s' % specs['memory']['clock']
-    if mem_map[specs['memory']['size']] is not None:
-        query_string += "&Z=" + mem_map[specs['memory']['size']]
-
-    url_with_query = "https://pcpartpicker.com/products/memory/#sort=price&R=4,5" + query_string
-    if locate_product_and_click('Memory', url_with_query, browser):
+    memory_url = f"https://pcpartpicker.com/products/memory/#sort=price&R=4,5{memory_query}"
+    if locate_product_and_click("Memory", memory_url, browser):
         exact_specs_found['memory'] = True
         wait_for_webpage(browser, 15, By.XPATH, "//div[@class='partlist__keyMetric']")
 
     # Add Motherboard. Matches M2 Slots, Wifi (Yes/No), PCIe slots
     query_string = ""
 
-    if specs['expansion']['pcie_x1'] is not None:
-        query_string += ('&B=%s,6' % specs['expansion']['pcie_x1'])
-    if specs['expansion']['pcie_x4'] is not None:
-        query_string += ('&b=%s,3' % specs['expansion']['pcie_x4'])
-    if specs['expansion']['pcie_x8'] is not None:
-        query_string += ('&H=%s,6' % specs['expansion']['pcie_x8'])
-    if specs['expansion']['pcie_x16'] is not None:
-        query_string += ('&h=%s,8' % specs['expansion']['pcie_x16'])
-    if specs['expansion']['m2_slots'] is not None:
-        query_string += ('&E=%s,7' % specs['expansion']['m2_slots'])
-    if specs['general']['wifi'] is True:
+    # Define a mapping for expansion slots and their query keys
+    expansion_mapping = {
+        'pcie_x1': ('B', 6),
+        'pcie_x4': ('b', 3),
+        'pcie_x8': ('H', 6),
+        'pcie_x16': ('h', 8),
+        'm2_slots': ('E', 7),
+    }
+
+    # Build the query string
+    for key, (query_key, value) in expansion_mapping.items():
+        if specs['expansion'].get(key) is not None:
+            query_string += f'&{query_key}={specs["expansion"][key]},{value}'
+
+    # Add WiFi support condition
+    if specs['general'].get('wifi'):
         query_string += '&V=10000,9000,8000,6001,6000,4000'
-    if mobo_map[specs['memory']['type']] is not None:
-        query_string += '&L=%s' % mobo_map[specs['memory']['type']]
+
+    # Add memory type query
+    memory_type = specs['memory']['type']
+    if mobo_map.get(memory_type) is not None:
+        query_string += f'&L={mobo_map[memory_type]}'
 
     url_with_query = 'https://pcpartpicker.com/products/motherboard/#sort=price&L=' + query_string
     if locate_product_and_click('Motherboard', url_with_query, browser):
         exact_specs_found['motherboard'] = True
         wait_for_webpage(browser, 15, By.XPATH, "//div[@class='partlist__keyMetric']")
 
-    # Add SSD, default to m2 form factor
+    # Add SSD: Defaults to m.2 form factor, matches interface and size
     if 'SSD' in specs['storage']['type']:
-        query_string = "&t=0"
-
-        # If NVMe protocol is specified, it is PCIe interface
-        if specs['storage']['ssd_interface'] == "NVMe":
-            query_string += "&D=1&c1=di_m2.pcie_20_x4,di_m2.pcie_30_x2,di_m2.pcie_30_x4,di_m2.pcie_40_x4,di_m2.pcie_40_x8,di_m2.pcie_50_x2,di_m2.pcie_50_x4"
-        
+        ssd_query = "&t=0"
         match specs['storage']['ssd_interface']:
-            case "NVMe":
-                query_string += "&D=1&c1=di_m2.pcie_20_x4,di_m2.pcie_30_x2,di_m2.pcie_30_x4,di_m2.pcie_40_x4,di_m2.pcie_40_x8,di_m2.pcie_50_x2,di_m2.pcie_50_x4"
-            case "PCIe":
-                query_string += "&c1=di_m2.pcie_20_x4,di_m2.pcie_30_x2,di_m2.pcie_30_x4,di_m2.pcie_40_x4,di_m2.pcie_40_x8,di_m2.pcie_50_x2,di_m2.pcie_50_x4"
-            case 'SATA':
-                query_string += "&c1=di_m2.sata"
-            case _:
-                if output_to_console:
-                    print("Couldn't find exact SSD interface... choosing a random compatible product")
+            case "NVMe" | "PCIe":
+                ssd_query += "&c1=di_m2.pcie_20_x4,di_m2.pcie_30_x2,di_m2.pcie_30_x4,di_m2.pcie_40_x4,di_m2.pcie_40_x8,di_m2.pcie_50_x2,di_m2.pcie_50_x4"
+            case "SATA":
+                ssd_query += "&c1=di_m2.sata"
+        if specs['storage']['ssd_size']:
+            ssd_query += f"&A={specs['storage']['ssd_size']}000000000"
 
-
-        if specs['storage']['ssd_size'] is not None:
-            query_string += "&A=" + specs['storage']['ssd_size'] + "000000000"
-
-        url_with_query = "https://pcpartpicker.com/products/internal-hard-drive/#sort=price&R=4,5" + query_string
-        if locate_product_and_click('SSD', url_with_query, browser):
+        ssd_url = f"https://pcpartpicker.com/products/internal-hard-drive/#sort=price&R=4,5{ssd_query}"
+        if locate_product_and_click("SSD", ssd_url, browser):
             exact_specs_found['ssd'] = True
             wait_for_webpage(browser, 15, By.XPATH, "//div[@class='partlist__keyMetric']")
 
-    # Add HDD
-    if 'HDD' in specs['storage']['type'] and specs['storage']['hdd_size'] is not ('0' or None):
-        query_string = ""
-        if specs['storage']['hdd_rpm'] is not None:
-            query_string += '&t=' + specs['storage']['hdd_rpm']
-        if specs['storage']['hdd_size'] is not None:
-            query_string += "&A=" + specs['storage']['hdd_size'] + "000000000"
+    # Add HDD: Matches RPM and size
+    if 'HDD' in specs['storage']['type'] and specs['storage']['hdd_size']:
+        hdd_query = ""
+        if specs['storage']['hdd_rpm']:
+            hdd_query += f"&t={specs['storage']['hdd_rpm']}"
+        if specs['storage']['hdd_size']:
+            hdd_query += f"&A={specs['storage']['hdd_size']}000000000"
 
-        url_with_query = "https://pcpartpicker.com/products/internal-hard-drive/#sort=price&R=4,5" + query_string
-        if locate_product_and_click('HDD', url_with_query, browser):
+        hdd_url = f"https://pcpartpicker.com/products/internal-hard-drive/#sort=price&R=4,5{hdd_query}"
+        if locate_product_and_click("HDD", hdd_url, browser):
             exact_specs_found['hdd'] = True
             wait_for_webpage(browser, 15, By.XPATH, "//div[@class='partlist__keyMetric']")
-    else:
-        # HDD was not found on original PC
-        exact_specs_found['hdd'] = True
 
-    # Add CPU Cooling
-    query_string = ""
-    match specs['processor']['cooling']:
-        # AIO
-        case "Liquid":
-            query_string += "&W=10120,10140,10240,10280,10360,10420"
-        # Fan
-        case "Air" | _:
-            query_string += "&W=0"
-   
-    url_with_query = "https://pcpartpicker.com/products/cpu-cooler/#sort=price&R=4,5" + query_string
-    if locate_product_and_click("Cooling", url_with_query, browser):
+    # Add Cooling: Matches cooling type
+    cooling_query = "&W=10120,10140,10240,10280,10360,10420" if specs['processor']['cooling'] == "Liquid" else "&W=0"
+    cooling_url = f"https://pcpartpicker.com/products/cpu-cooler/#sort=price&R=4,5{cooling_query}"
+    if locate_product_and_click("Cooling", cooling_url, browser):
         exact_specs_found['cooling'] = True
         wait_for_webpage(browser, 15, By.XPATH, "//div[@class='partlist__keyMetric']")
 
@@ -513,26 +512,10 @@ def process_specs(browser, specs):
 
     # Add Power Supply
     # If on home page, get estimated wattage needed to power the PC
-    estimated_wattage = ''
-    if browser.current_url == "https://pcpartpicker.com/list":
-        element = browser.find_element(By.CLASS_NAME, "partlist__keyMetric")
-        estimated_wattage = element.text.replace("Estimated Wattage: ", "")[:-1]
-
-    query_string = ""
-    true_wattage = False
-
-    # Found true wattage from parsed data
-    if specs['power']['wattage'] is not None:
-        true_wattage = True
-        query_string = "&A=" + specs['power']['wattage'] + "000000000,2000000000000"
-    
-    # Using estimated wattage, could not match exact spec
-    if estimated_wattage is not None and not true_wattage:
-        exact_specs_found['psu'] = False
-        query_string = "&A" + estimated_wattage + "000000000,2000000000000"
-
-    url_with_query = "https://pcpartpicker.com/products/power-supply/#sort=price&R=4,5" + query_string
-    if locate_product_and_click("PSU", url_with_query, browser):
+    psu_wattage = specs['power']['wattage'] or estimated_wattage
+    psu_query = f"&A={psu_wattage}000000000,2000000000000"
+    psu_url = f"https://pcpartpicker.com/products/power-supply/#sort=price&R=4,5{psu_query}"
+    if locate_product_and_click("PSU", psu_url, browser):
         exact_specs_found['psu'] = True
         wait_for_webpage(browser, 15, By.XPATH, "//div[@class='partlist__keyMetric']")
 
@@ -589,7 +572,7 @@ def get_driver():
     user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36"
     chrome_options = uc.options.ChromeOptions()
 
-    proxy_extension_path = './script/proxy_ext'
+    proxy_extension_path = './proxy_ext'
     chrome_options.add_argument("--load-extension=" + proxy_extension_path)
     chrome_options.add_argument('--headless=new')
     chrome_options.add_argument("--start-maximized")
@@ -597,7 +580,7 @@ def get_driver():
     chrome_options.add_argument("--blink-settings=imagesEnabled=false")
     chrome_options.add_argument(f"--proxy-server={prox}")
 
-    return uc.Chrome(options=chrome_options, driver_executable_path="./script/drivers/chromedriver-linux64/chromedriver", version_main=126) if linux else uc.Chrome(options=chrome_options)
+    return uc.Chrome(options=chrome_options, driver_executable_path="./drivers/chromedriver-linux64/chromedriver", version_main=126) if linux else uc.Chrome(options=chrome_options)
 
 if __name__ == '__main__':
 
@@ -620,7 +603,7 @@ if __name__ == '__main__':
     retrieve_pc_specs(url)
     
      # Write background script for extension to file (using updated proxy user + pass)
-    if not os.path.isfile("./script/proxy_ext/background.js"):
+    if not os.path.isfile("./proxy_ext/background.js"):
         try:
             b_js = """chrome.webRequest.onAuthRequired.addListener((details, callback) => {
                 callback({
@@ -634,7 +617,7 @@ if __name__ == '__main__':
             ['asyncBlocking']
             );"""
 
-            f = open("./script/proxy_ext/background.js","w+")
+            f = open("./proxy_ext/background.js","w+")
             f.write(b_js)
             f.close()
         except Exception:
