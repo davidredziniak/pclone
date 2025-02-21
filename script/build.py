@@ -46,39 +46,39 @@ exact_specs_found = {'cpu': False, 'gpu': False, 'motherboard': False, 'memory':
 
 # Output JSON for use in web app
 output_json = {'success': False, 'exactPc': False, 'originalPrice': 0, 'newPrice': 0, 'link': ''}
-output_to_console = True
+output_to_console = False
 
 def load_ppp_maps():
     # Load CPU
-    with open('./pcpartpicker/cpu.txt', 'r') as _:
+    with open('./script/pcpartpicker/cpu.txt', 'r') as _:
         for line in _:
             line = line.strip()
             if line:
                 key, value = line.split(':')
                 cpu_map[str(key)] = str(value)
     # Load Case
-    with open('./pcpartpicker/case.txt', 'r') as _:
+    with open('./script/pcpartpicker/case.txt', 'r') as _:
         for line in _:
             line = line.strip()
             if line:
                 key, value = line.split(':')
                 case_map[str(key)] = str(value)
     # Load Motherboard
-    with open('./pcpartpicker/motherboard.txt', 'r') as _:
+    with open('./script/pcpartpicker/motherboard.txt', 'r') as _:
         for line in _:
             line = line.strip()
             if line:
                 key, value = line.split(':')
                 mobo_map[str(key)] = str(value)
     # Load Memory
-    with open('./pcpartpicker/memory.txt', 'r') as _:
+    with open('./script/pcpartpicker/memory.txt', 'r') as _:
         for line in _:
             line = line.strip()
             if line:
                 key, value = line.split(':')
                 mem_map[str(key)] = str(value)
     # Load GPU
-    with open('./pcpartpicker/gpu.txt', 'r') as _:
+    with open('./script/pcpartpicker/gpu.txt', 'r') as _:
         for line in _:
             line = line.strip()
             if line:
@@ -130,7 +130,7 @@ def load_env():
 def retrieve_pc_specs(url):
     # Define headers for web requests
     headers = {
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.8',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'Accept-Encoding': 'gzip, deflate, br, zstd',
         'Accept-Language': 'en-US,en;q=0.5',
         'Connection': 'keep-alive',
@@ -141,7 +141,7 @@ def retrieve_pc_specs(url):
         'Sec-Fetch-Site': 'none',
         'Sec-Fetch-User': '?1',
         'TE': 'trailers',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
     }
     
     # Best Buy specific filtering
@@ -161,13 +161,16 @@ def retrieve_pc_specs(url):
         #res = requests.get(url, headers=headers, verify=True, proxies=pro)
         res = ''
         with httpx.Client(proxy=pro['http://']) as client:
-            res = client.get(url, headers=headers, timeout=None)
+            res = client.get(url, headers=headers, timeout=10)
 
         # Retrieve Price of PC
-        price = re.search(
-            'data-testId="customer-price" tabindex="-1"><span aria-hidden="true">\\$(.*?)</span>', res.text).group(1)
+        price = re.search('data-testId="customer-price" tabindex="-1"><span aria-hidden="true">\\$(.*?)</span>', res.text).group(1)
+        if price == "":
+            exit()
+
         price = float(price.replace(',', ''))
         specs['general']['price'] = price
+
 
         # Search for the specifications in JSON format
         json_string = re.search(
@@ -345,12 +348,12 @@ Args:
     url (str): URL of the page to search.
     browser (webdriver): Selenium WebDriver instance.
     product_name (str, optional): Specific name of the product to find. Defaults to None.
-    output_to_console (bool, optional): Whether to print messages to the console. Defaults to True.
+    output_to_console (bool, optional): Whether to print messages to the console. Defaults to False.
 
 Returns:
     bool: True if the product is found and added; False otherwise.
 """
-def locate_product_and_click(product_type, url, browser, product_name=None, output_to_console=True):
+def locate_product_and_click(product_type, url, browser, product_name=None, output_to_console=False):
     if output_to_console:
         print(f"Locating {product_type}...", end='')
 
@@ -512,7 +515,7 @@ def process_specs(browser, specs):
 
     # Add Power Supply
     # If on home page, get estimated wattage needed to power the PC
-    psu_wattage = specs['power']['wattage'] or estimated_wattage
+    psu_wattage = specs['power']['wattage']
     psu_query = f"&A={psu_wattage}000000000,2000000000000"
     psu_url = f"https://pcpartpicker.com/products/power-supply/#sort=price&R=4,5{psu_query}"
     if locate_product_and_click("PSU", psu_url, browser):
@@ -569,12 +572,12 @@ def output(original_price, new_price, url, found_exact):
 
 def get_driver():
     prox = PROXY_HOST + ":" + PROXY_PORT
-    user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36"
+    user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
     chrome_options = uc.options.ChromeOptions()
 
-    proxy_extension_path = './proxy_ext'
+    proxy_extension_path = os.getcwd() + './script/proxy_ext'
     chrome_options.add_argument("--load-extension=" + proxy_extension_path)
-    chrome_options.add_argument('--headless=new')
+    #chrome_options.add_argument('--headless=new')
     chrome_options.add_argument("--start-maximized")
     chrome_options.add_argument("user-agent={}".format(user_agent))
     chrome_options.add_argument("--blink-settings=imagesEnabled=false")
@@ -603,7 +606,7 @@ if __name__ == '__main__':
     retrieve_pc_specs(url)
     
      # Write background script for extension to file (using updated proxy user + pass)
-    if not os.path.isfile("./proxy_ext/background.js"):
+    if not os.path.isfile("./script/proxy_ext/background.js"):
         try:
             b_js = """chrome.webRequest.onAuthRequired.addListener((details, callback) => {
                 callback({
@@ -617,7 +620,7 @@ if __name__ == '__main__':
             ['asyncBlocking']
             );"""
 
-            f = open("./proxy_ext/background.js","w+")
+            f = open("./script/proxy_ext/background.js","w+")
             f.write(b_js)
             f.close()
         except Exception:
