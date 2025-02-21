@@ -11,7 +11,7 @@ AMD Athlon II X4:6
 AMD Athlon X2:30
 AMD Athlon X4:31
 AMD E2-Series:33
-AMD E-Series:19
+AMD EPYC:75
 AMD FX:23
 AMD Opteron:57
 AMD Phenom II X2:5
@@ -20,12 +20,14 @@ AMD Phenom II X4:2
 AMD Phenom II X6:8
 AMD Ryzen 3:62
 AMD Ryzen 5:60
-AMD Ryzen 7:59
+AMD Ryzen 5 PRO:65
+AMD Ryzen 7':59
+AMD Ryzen 7 PRO:66
 AMD Ryzen 9:69
+AMD Ryzen 9 PRO:71
 AMD Sempron:17
 AMD Sempron X2:29
 AMD Threadripper:63
-Intel Atom:18
 Intel Celeron:3
 Intel Core 2 Duo:10
 Intel Core 2 Extreme:16
@@ -35,8 +37,12 @@ Intel Core i5:12
 Intel Core i7:13
 Intel Core i7 Extreme:14
 Intel Core i9:61
+Intel Core Ultra 5:76
+Intel Core Ultra 7:77
+Intel Core Ultra 9:78
 Intel Pentium:9
 Intel Pentium Gold:68
+Intel Processor:74
 Intel Xeon E:70
 Intel Xeon E3:26
 Intel Xeon E5:27
