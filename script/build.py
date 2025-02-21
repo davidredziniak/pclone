@@ -673,7 +673,7 @@ def get_driver():
 
     proxy_extension_path = os.getcwd() + './script/proxy_ext'
     chrome_options.add_argument("--load-extension=" + proxy_extension_path)
-    #chrome_options.add_argument('--headless=new')
+    chrome_options.add_argument('--headless=new')
     chrome_options.add_argument("--start-maximized")
     chrome_options.add_argument("user-agent={}".format(user_agent))
     chrome_options.add_argument("--blink-settings=imagesEnabled=false")
